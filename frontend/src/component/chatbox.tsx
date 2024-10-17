@@ -45,7 +45,7 @@ const ChatBox: React.FC = () => {
     setAbortController(controller);
 
     try {
-      const response = await fetch("http://localhost:5000/product_prices", {
+      const response = await fetch("https://backend-api-pjri.onrender.com/product_prices", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
