@@ -247,14 +247,12 @@ def get_product_prices():
             for item in suppliers:
                 product_name = item.get("product_name", "Unknown Product")
                 price = item.get("price", "Price not found")
-                # product_image_list = get_ebay_product_images(product_name, EBAY_ID, limit)
-                product_image_url = "/static/placeholder.png"
-
-                # product_image_list[0] if product_image_list else "Image not Available"
+                product_image_list = get_ebay_product_images(product_name, EBAY_ID, limit)
+                product_image_url = product_image_list[0] if product_image_list else "Image not Available"
 
                 # Check if the product image URL is valid and not empty; if not, use placeholder image
-                # if not product_image_url or not validators.url(product_image_url):
-                #     product_image_url = "/static/placeholder.png"
+                if not product_image_url or not validators.url(product_image_url):
+                    product_image_url = "/static/placeholder.png"
 
                 structured_response.append({
                     "supplier": item.get("supplier", "Unknown Supplier"),
