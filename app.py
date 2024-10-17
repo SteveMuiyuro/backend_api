@@ -191,7 +191,9 @@ def get_ebay_product_images(product_name, ebay_app_id, num_results):
     except (requests.exceptions.HTTPError, requests.exceptions.RequestException) as e:
         return f"Error fetching images: {e}"
 
-
+@app.route('/')
+def home():
+    return "Welcome to the Flask App", 200
 
 @app.route('/product_prices', methods=['POST'])
 def get_product_prices():
