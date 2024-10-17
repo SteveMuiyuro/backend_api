@@ -1,7 +1,7 @@
 import os
 import json
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify,url_for
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 from jsonschema import validate, ValidationError
@@ -253,9 +253,13 @@ def get_product_prices():
                 product_image_list = get_ebay_product_images(product_name, EBAY_ID, limit)
                 product_image_url = product_image_list[0] if product_image_list else "Image not Available"
 
-                # Check if the product image URL is valid and not empty; if not, use placeholder image
                 if not product_image_url or not validators.url(product_image_url):
-                    product_image_url = "/static/placeholder.png"
+                # Use url_for to generate correct static file path
+                    product_image_url = url_for('static', filename='placeholder.png')
+
+                # # Check if the product image URL is valid and not empty; if not, use placeholder image
+                # if not product_image_url or not validators.url(product_image_url):
+                #     product_image_url = "/static/placeholder.png"
 
                 structured_response.append({
                     "supplier": item.get("supplier", "Unknown Supplier"),
@@ -311,4 +315,3 @@ def get_product_prices():
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))  # Default to 5000 if PORT is not set
     app.run(host='0.0.0.0', port=port)
-
