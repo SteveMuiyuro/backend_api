@@ -28,7 +28,6 @@ cssselect==1.2.0
 cymem==2.0.8
 defusedxml==0.7.1
 distro==1.9.0
-en-core-web-sm==3.7.1
 entrypoints==0.3
 exceptiongroup==1.2.2
 fastapi==0.115.2
