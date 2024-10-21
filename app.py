@@ -82,9 +82,9 @@ def query_perplexity(prompt):
     payload = {
         "model": "llama-3.1-sonar-large-128k-online",
         "messages": [
-            {"role": "system", "content": f"Generate a response using the following schema: {schema_description}. "
+            {"role": "system", "content": f" your are a proddcut information speacilist. Generate a response using the following schema: {schema_description}. "
                 "Ensure your response only contains JSON matching this structure."},
-            {"role": "user", "content": f"{prompt} prioritize results with actual price, supplier's name, product name, and location as mandatory fields; return at least four results"}
+            {"role": "user", "content": f"{prompt} prioritize results with actual price, supplier's name, product name, and location as mandatory fields; return at least six to eight results always priotise those results with price information"}
         ],
         "temperature": 0
     }
@@ -204,7 +204,7 @@ def get_product_prices():
             return jsonify({"error": "Missing 'prompt' in the request body"}), 400
 
         prompt = data.get("prompt").strip()
-        limit = data.get("limit", 10)
+        limit = data.get("limit", 8)
 
         print(f"Received prompt: {prompt} with limit: {limit}")  # Debugging statement
 
