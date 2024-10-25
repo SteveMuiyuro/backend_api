@@ -9,25 +9,189 @@ import re
 from flask_caching import Cache
 import validators
 from flask_cors import CORS
+from pymongo import MongoClient
+# from langchain.prompts import PromptTemplate
+# from langchain.chains import LLMChain
+# from langchain.llms import OpenAI
+import uuid
+from datetime import datetime, timezone
 
 app = Flask(__name__, static_folder='static')
 app = Flask(__name__)
-CORS(app,resources={r"/*": {"origins": ["http://localhost:5174", "https://frontend-ruddy-seven-59.vercel.app"]}})
+CORS(app)
+
+
 
 load_dotenv()
+
+
 
 # Access the API keys
 PERPLEXITY_API = os.getenv("PERPLEXITY_API_KEY")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY")
 EBAY_ID = os.getenv("EBAY_ACCESS_KEY")
 API_URL = "https://api.perplexity.ai/chat/completions"
+CHAT_QUERY_URL = "https://api.perplexity.ai/query"
+MONGO_URI = os.getenv("MONGO_URI")
+
+print(PERPLEXITY_API)
+
+# Use a ThreadPoolExecutor for concurrent API calls
+executor = ThreadPoolExecutor(max_workers=10)
+
+client = MongoClient(MONGO_URI)
+db = client.sourcify
+purchase_requests_collection = db.requests
+# sample = purchase_requests_collection.find_one()
+# print(sample)
+
+
+# # List collection names
+
+# print(list(purchase_requests_collection.find({})))
 
 # Configure caching
 app.config['CACHE_TYPE'] = 'simple'
 cache = Cache(app)
 
-# Use a ThreadPoolExecutor for concurrent API calls
-executor = ThreadPoolExecutor(max_workers=10)
+# Session data store to track conversation state
+session_data = {}
+def generate_pr_id():
+    return f"PR-{uuid.uuid4().hex[:6]}"
+
+# Function to create dynamic prompts based on conversation state
+def create_prompt(current_step, user_input=None):
+    if current_step == 'start':
+        return "Hello! Let's create a new purchase request. When is the due date for the request?"
+    elif current_step == 'due_date':
+        return f"Got it! The due date is {user_input}. What is the reason for this purchase?"
+    elif current_step == 'reason':
+        return f"Reason noted: {user_input}. Now, what is the priority of this request? (Urgent, High, Medium, Low)"
+    elif current_step == 'priority':
+        return f"Priority set to {user_input}. Please list the items you need and their quantities, e.g., '50 desks, 30 monitors'."
+    elif current_step == 'items':
+        return f"Items recorded: {user_input}. Would you like to submit this request now?"
+    elif current_step == 'another_request':
+        return "Would you like to create another request? Type 'yes' to start over or 'no' to exit."
+    return "I didn't understand your input. Please try again."
+
+# Function to validate input for each step
+def validate_input(current_step, user_input):
+    if current_step == "due_date":
+        try:
+            due_date = datetime.strptime(user_input, '%Y-%m-%d')
+            current_date = datetime.now().date()  # Get today's date
+            if due_date.date() < current_date:
+                return False, "The due date cannot be in the past. Please provide a valid date (today or later)."
+        except ValueError:
+            return False, "Please enter the due date in YYYY-MM-DD format."
+
+    elif current_step == "priority":
+        if user_input not in ["Urgent", "High", "Medium", "Low"]:
+            return False, "Priority must be one of Urgent, High, Medium, or Low."
+
+    return True, None
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    user_id = request.json.get('user_id')  # Retrieve user_id from request to track session
+    user_input = request.json.get('message')  # Retrieve user's input
+
+    # Initialize session if it's a new user or reset session state if empty
+    if user_id not in session_data or 'step' not in session_data[user_id]:
+        session_data[user_id] = {
+            "step": "start",  # Track current step in the conversation
+            "due_date": None,
+            "reason": None,
+            "priority": None,
+            "items": None
+        }
+
+    session = session_data[user_id]  # Access session data for the current user
+    current_step = session['step']
+
+    # Start of conversation
+    if current_step == "start":
+        session['step'] = "due_date"  # Move to the next step
+        return jsonify({"response": "Hello! Let's create a purchase request. When is the due date for the request?"})
+
+    # Validate input if necessary
+    is_valid, error_msg = validate_input(current_step, user_input)
+    if not is_valid:
+        return jsonify({"response": error_msg})
+
+    # Handle each step in the conversation
+    if current_step == "due_date":
+        session['due_date'] = user_input
+        session['step'] = "reason"
+        return jsonify({"response": create_prompt("due_date", user_input)})
+
+    elif current_step == "reason":
+        session['reason'] = user_input
+        session['step'] = "priority"
+        return jsonify({"response": create_prompt("reason", user_input)})
+
+    elif current_step == "priority":
+        session['priority'] = user_input
+        session['step'] = "items"
+        return jsonify({"response": create_prompt("priority", user_input)})
+
+    elif current_step == "items":
+        session['items'] = user_input
+        session['step'] = "confirmation"
+        summary = (
+            f"Please confirm the following details before submitting:\n"
+            f"- Due Date: {session['due_date']}\n"
+            f"- Reason: {session['reason']}\n"
+            f"- Priority: {session['priority']}\n"
+            f"- Items: {session['items']}\n"
+            "Type 'yes' to submit or 'no' to cancel."
+        )
+        return jsonify({"response": summary})
+
+    elif current_step == "confirmation":
+        if user_input.lower() in ["yes", "submit"]:
+            pr_id = generate_pr_id()
+            request_data = {
+                "title": f"PR · {pr_id} Purchase Request",
+                "dueDate": datetime.strptime(session['due_date'], '%Y-%m-%d'),
+                "reason": session['reason'],
+                "priority": session['priority'],
+                "items": session['items'],
+                "status": "submitted",
+                "createdAt": datetime.now(timezone.utc),
+                "updatedAt": datetime.now(timezone.utc),
+                "requestId": pr_id
+            }
+            try:
+                purchase_requests_collection.insert_one(request_data)
+                session['step'] = "another_request"  # Ask if they want to start over
+                return jsonify({"response": f"Purchase request {pr_id} has been submitted successfully! Would you like to create another request? Type 'yes' or 'no'."})
+            except Exception as e:
+                return jsonify({"response": f"Error submitting purchase request: {str(e)}"})
+
+        elif user_input.lower() in ["no", "cancel"]:
+            session_data[user_id] = {"step": "another_request"}  # Reset to ask about new request
+            return jsonify({"response": "Purchase request has been canceled. Would you like to create another request? Type 'yes' or 'no'."})
+
+    elif current_step == "another_request":
+        if user_input.lower() == "yes":
+            session_data[user_id] = {
+                "step": "start",  # Reset session for a new request
+                "due_date": None,
+                "reason": None,
+                "priority": None,
+                "items": None
+            }
+            return jsonify({"response": create_prompt("start")})
+        elif user_input.lower() == "no":
+            session_data[user_id] = {}  # Clear session if no new request
+            return jsonify({"response": "Thank you! Ending the session.", "exit": True})
+
+    # Fallback response
+    return jsonify({"response": create_prompt(session['step'], user_input)})
+
+
 
 # Define the expected JSON schema for validation
 expected_schema = {
@@ -92,7 +256,7 @@ def query_perplexity(prompt):
     response = requests.post(API_URL, headers=headers, json=payload, timeout=100)
     response.raise_for_status()
 
-    return response.json()  # We return JSON
+    return response.json()
 
 
 def query_general(prompt):
@@ -133,7 +297,7 @@ def query_general(prompt):
         # Clean the content by removing unnecessary characters
         cleaned_content = re.sub(r"[#*]+", "", content).strip()
 
-        # Keep it short, return the content as-is
+
         return {"response": cleaned_content}
 
     except requests.exceptions.HTTPError as http_err:
@@ -213,7 +377,7 @@ def get_product_prices():
             future = executor.submit(query_perplexity, f"{prompt} return {limit} results")
             response_dict = future.result()
 
-            # print(f"Response from Perplexity: {response_dict}")  # Debugging statement
+
 
             # Extract the 'choices' field from the Perplexity response
             choices = response_dict.get("choices", [])
@@ -308,7 +472,6 @@ def get_product_prices():
     except Exception as e:
         print(f"An unexpected error occurred: {e}")  # Log unexpected errors
         return jsonify({"error": "An unexpected error occurred", "details": str(e)}), 500
-
 
 
 
