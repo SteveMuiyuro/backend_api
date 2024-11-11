@@ -307,12 +307,6 @@ def get_product_prices():
     # Collect product name
     if step == "product":
         session['product'] = user_input
-        session['step'] = "budget"
-        return jsonify({"response": "What is your budget?"})
-
-    # Collect budget
-    elif step == "budget":
-        session['budget'] = user_input
         session['step'] = "location"
         return jsonify({"response": "What is your specific search location?"})
 
@@ -324,7 +318,7 @@ def get_product_prices():
         location = session['location']
 
      #Construct prompt for querying
-        prompt = f"What is the price of {product_name} in {location} the price of results should be equal to or below {budget} otherwise advise the user that there are no items within that budget?"
+        prompt = f"What is the price of {product_name} in {location} ensuring the price is or below {budget}?"
         session['prompt'] = prompt
 
         # Fetch results and proceed to another product decision
