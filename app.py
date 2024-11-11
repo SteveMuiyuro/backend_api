@@ -293,7 +293,6 @@ def get_product_prices():
         session_data[user_id] = {
             "step": "product",
             "product": None,
-            "budget": None,
             "location": None
         }
         # Send initial message only if 'start' is received from the frontend
@@ -314,11 +313,10 @@ def get_product_prices():
     elif step == "location":
         session['location'] = user_input
         product_name = session['product']
-        budget = session['budget']
         location = session['location']
 
      #Construct prompt for querying
-        prompt = f"What is the price of {product_name} in {location} ensuring the price is or below {budget}?"
+        prompt = f"What is the price of {product_name} in {location}?"
         session['prompt'] = prompt
 
         # Fetch results and proceed to another product decision
