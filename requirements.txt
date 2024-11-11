@@ -129,7 +129,7 @@ spacy-legacy==3.0.12
 spacy-loggers==1.0.5
 srsly==2.4.8
 starlette==0.40.0
-tenacity==9.0.0
+tenacity>=8.1.0,<9.0.0
 thinc==8.2.5
 threadpoolctl==3.5.0
 tldextract==5.1.2
