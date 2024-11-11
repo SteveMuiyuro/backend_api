@@ -48,7 +48,12 @@ request_for_collections = db.requestfors
 
 session_data = {}
 # Redis setup for session storage
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+redis_client = redis.Redis(
+    host=os.environ.get('REDIS_URL'),
+    port=int(os.environ.get('REDIS_PORT', 6379)),  # default port is 6379
+    password=os.environ.get('REDIS_PASSWORD', None),  # if password is needed
+    db=0  # select the correct database if using more than one
+)
 
 # Initialize OpenAI's GPT-4 model
 llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
