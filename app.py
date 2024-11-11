@@ -14,7 +14,7 @@ import uuid
 from datetime import datetime, timezone
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 app.secret_key = os.getenv("FLASK_SECRET_KEY")
 CORS(app)
 load_dotenv()
