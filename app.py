@@ -46,6 +46,7 @@ users_collection = db.users
 roles_collection = db.roles
 request_for_collections = db.requestfors
 
+
 session_data = {}
 
 # redis_client = redis.Redis(host='localhost', port=6379, db=0) #Local
@@ -64,11 +65,11 @@ memory = ConversationBufferMemory(return_messages=True,  initial_messages=[
 # Define prompt templates for each conversation step
 greeting_template = PromptTemplate(
     input_variables=["user_name"],
-    template="Ask the user the following question, Hello {user_name}, I'm here to assist you in searching for product prices in various locations. What kind of product are you looking for?"
+    template="Ask the user the following question , Hello {user_name}, I'm here to assist you in searching for product prices in various locations. What kind of product are you looking for?"
 )
 
 location_template = PromptTemplate(
-    template="Ask the user the following question, What is your specified search location?"
+    template="Ask the user the following question, What is your specified search location? don't use greetings at the start of the question"
 )
 
 final_prompt_template = PromptTemplate(
@@ -345,7 +346,7 @@ def delete_session_data(user_id):
 def get_product_prices():
     user_id = request.json.get('userId')
     user_input = request.json.get('message')
-    user_name = request.json.get('userName', 'User')
+    user_name = request.json.get('userName')
 
         # Check if session data exists for the user
     session = get_session_data(user_id)
@@ -360,7 +361,7 @@ def get_product_prices():
         return jsonify({"response": response})
 
     # Retrieve the current step from session data
-    step = session.get("step")
+    step = session.get("step", "product")
     print(f"Current step: {step}")  # Debugging
 
     # Process based on the current step
@@ -401,8 +402,8 @@ def get_product_prices():
     elif step == "another_product":
         if user_input.lower() == "yes":
              # Reset session for a new search and keep the user's name
-            delete_session_data(user_id)
-            set_session_data(user_id, {"step": "product", "user_name": user_name})
+            # delete_session_data(user_id)
+            set_session_data(user_id, {"step": "product"})
 
             # Send the introductory message again for a new search
             response = conversation_chain.predict(input=greeting_template.format(user_name=user_name))
