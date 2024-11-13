@@ -59,7 +59,7 @@ llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
 
 # Set up memory for conversation
 memory = ConversationBufferMemory(return_messages=True,  initial_messages=[
-        SystemMessage(content="Please ensure The response for the product step and the location step are one two sentences maximum and always mention the username in your response.")
+        SystemMessage(content="You are a friendly assistant helping the user get prices for the various products based on location. Please ensure The response for the product step and the location step are one two sentences maximum and always mention the username in your response.")
     ])
 
 # Define prompt templates for each conversation step
@@ -358,7 +358,7 @@ def get_product_prices():
 
         # Send the introductory message only once
         response = conversation_chain.predict(input=greeting_template.format(user_name=user_name))
-        return jsonify({"response": response})
+        return jsonify({"response": response, "initial":False})
 
     # Retrieve the current step from session data
     step = session.get("step", "product")
