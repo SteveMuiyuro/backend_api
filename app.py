@@ -358,7 +358,7 @@ def get_product_prices():
 
         # Send the introductory message only once
         response = conversation_chain.predict(input=greeting_template.format(user_name=user_name))
-        return jsonify({"response": response, "initial":False})
+        return jsonify({"response": response})
 
     # Retrieve the current step from session data
     step = session.get("step", "product")
