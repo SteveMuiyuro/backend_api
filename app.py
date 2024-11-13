@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 from jsonschema import  ValidationError
 from flask_cors import CORS
-import redis
 from helpers.product_prices_helpers import  detect_product_query, get_product_price_data, query_general
 from helpers.get_product_prices_helpers import get_session_data, set_session_data, delete_session_data
 
@@ -26,7 +25,6 @@ OPEN_AI_KEY = os.getenv("OPENAI_API_KEY")
 
 # Initialize OpenAI's GPT-4 model
 llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
-
 
 # Set up memory for conversation
 memory = ConversationBufferMemory(return_messages=True,  initial_messages=[
