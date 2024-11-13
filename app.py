@@ -24,11 +24,6 @@ load_dotenv()
 # Access the API keys
 OPEN_AI_KEY = os.getenv("OPENAI_API_KEY")
 
-
-# redis_client = redis.Redis(host='localhost', port=6379, db=0) #Local
-redis_client = redis.Redis.from_url(os.environ.get('REDIS_URL')) #Production
-
-
 # Initialize OpenAI's GPT-4 model
 llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
 
