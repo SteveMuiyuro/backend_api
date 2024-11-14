@@ -38,7 +38,7 @@ greeting_template = PromptTemplate(
 )
 
 location_template = PromptTemplate(
-    template="Acknowledge the response from previous prompt that contains {product_name} if it exits. Ask the user whats their specified search location?"
+    template=" if the resposne from the previous prompt contains {product_name}, Acknowledge the input from the user, and Ask the user whats their specified search location?"
 )
 
 final_prompt_template = PromptTemplate(
