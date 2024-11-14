@@ -1,7 +1,6 @@
 import json
 import redis
 import os
-
 # redis_client = redis.Redis(host='localhost', port=6379, db=0) #Local
 redis_client = redis.Redis.from_url(os.environ.get('REDIS_URL')) #Production
 

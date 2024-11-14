@@ -34,16 +34,28 @@ memory = ConversationBufferMemory(return_messages=True,  initial_messages=[
 # Define prompt templates for each conversation step
 greeting_template = PromptTemplate(
     input_variables=["user_name"],
-    template="Start by greeting the user, Hello! {user_name},  and then proceed and ask the following question, I'm here to assist you in searching for product prices in various locations. What kind of product are you looking for?"
+    template="Start by greeting the user, Hello! {user_name},  and then proceed and ask the user to provide the details of the specific product they are looking for?"
 )
 
 location_template = PromptTemplate(
-    template="Ask the user whats their specified search location?"
+    template="Acknowledge the response from previous prompt that contains {product_name} if it exits. Ask the user whats their specified search location?"
 )
 
 final_prompt_template = PromptTemplate(
     input_variables=["product_name", "location"],
     template="What is the price of {product_name} in {location}?"
+)
+
+option_template = PromptTemplate(
+    template="Now that the user has received a couple of results that you sent, respond to the user citing that you hope the results for {product_name} are sufficient. Ask the user if they want to search for another product by typing yes to proceed or no to end the session"
+)
+
+exit_template = PromptTemplate(
+    template="Say Thank you! to the user and let them know that they can always reach out if they ned more assistance"
+)
+
+another_product_template = PromptTemplate(
+    template="You can start your sentence with Awesome {user_name}, cool {user_name} or any other word that shows excitement to proceed, proceed and request the user  to provide details of the product they are looking for"
 )
 
 
@@ -66,7 +78,6 @@ def get_product_prices():
 
         # Check if session data exists for the user
     session = get_session_data(user_id)
-
     # Handle session reset on 'start' command or initialize session if empty
     if user_input.lower() == "start" or not session:
         delete_session_data(user_id)  # Clear previous session data if any
@@ -88,7 +99,7 @@ def get_product_prices():
         set_session_data(user_id, session)
 
         # Send location template directly to user without model processing
-        response = response = conversation_chain.predict(input=location_template.format())
+        response = conversation_chain.predict(input=location_template.format(product_name=session["product"]))
         return jsonify({"response": response})
 
     elif step == "location":
@@ -100,11 +111,12 @@ def get_product_prices():
         # Generate the final prompt for retrieving product price data
         prompt = final_prompt_template.format(product_name=product_name, location=location)
         response_data = get_product_price_data(prompt, 8)
+        response = conversation_chain.predict(input=option_template.format(product_name=product_name))
 
         # Ensure the response data is JSON serializable
         response_json = jsonify({
             "response": response_data.json,
-            "next_prompt": "Would you like to search for another product? Type yes or no."
+            "next_prompt": response
         })
 
         # Update step for another product search
@@ -119,18 +131,19 @@ def get_product_prices():
             set_session_data(user_id, {"step": "product"})
 
             # Send the introductory message again for a new search
-            response = conversation_chain.predict(input=greeting_template.format(user_name=user_name))
+            response = conversation_chain.predict(input=another_product_template.format(user_name=user_name))
             return jsonify({"response": response})
         else:
             delete_session_data(user_id)
-            return jsonify({"response": "Thank you! If you need more assistance, feel free to reach out.", "exit": True})
+            response = conversation_chain.predict(input=exit_template.format())
+            return jsonify({"response": response, "exit": True})
 
     # If step is unrecognized, reset to initial state
     delete_session_data(user_id)
     set_session_data(user_id, {"step": "product"})
 
     # Send greeting template directly to user without model processing
-    response = greeting_template.format(user_name=user_name)
+    conversation_chain.predict(input=greeting_template.format(user_name=user_name))
     return jsonify({"response": "Session reset due to an unexpected state. Let's start over. " + response})
 
 
