@@ -31,10 +31,6 @@ client = MongoClient(MONGO_URL)
 db = client.sourcify
 bids_collection = db.bids
 requests_fors = db.requestfors
-results_bids = bids_collection.find({})
-request_id = "6710048ca489320770e1ce3e"
-
-
 
 def find_request_id(input_value, db):
     try:
