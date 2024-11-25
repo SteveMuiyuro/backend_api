@@ -55,38 +55,48 @@ def recommend_best_quotes():
     user_input = request.json.get('message')
     user_name = request.json.get('userName')
 
-    session = get_session_data(user_id)
-    # Reset session
-    if user_input == "start":
-        # Reset session only on "start" and set a flag
-        set_session_data(user_id, {"step": "rfq_checking", "greeting_sent": True})
-        response = conversation_chain.predict(input=quote_recomendation_greeting_template.format(user_name=user_name))
-        return jsonify({"response": response, "status": False})
+    if not user_id:
+        print("Error: userId is missing in the request.")
+        return jsonify({"error": "User ID is required"}), 400
 
-    # Check if the session exists and greeting has already been sent
+
+    session = get_session_data(user_id)
+
+    # Initialize session if not found
     if not session:
-        # If no session, initialize with greeting already sent
-        set_session_data(user_id, {"step": "rfq_checking", "greeting_sent": True})
-        response = conversation_chain.predict(input=quote_recomendation_greeting_template.format(user_name=user_name))
-        return jsonify({"response": response, "status": False})
-    elif not session.get("greeting_sent"):
-        # If session exists but greeting was not sent, send it
+        session = {
+            "userId": user_id,
+            "userName": user_name,
+            "userInput": user_input,
+            "step": "rfq_checking",
+            "greeting_sent": True
+        }
+        set_session_data(user_id, session)
+
+
+    # Handle "start" input to reset session
+    if user_input == "start":
+        session["step"] = "rfq_checking"
         session["greeting_sent"] = True
         set_session_data(user_id, session)
-        response = conversation_chain.predict(input=quote_recomendation_greeting_template.format(user_name=user_name))
+        print(f"Session reset for {user_id}: {session}")
+        response = conversation_chain.predict(
+            input=quote_recomendation_greeting_template.format(user_name=user_name)
+        )
         return jsonify({"response": response, "status": False})
 
+    # Check and update greeting status
+    if not session.get("greeting_sent"):
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=quote_recomendation_greeting_template.format(user_name=user_name)
+        )
+        return jsonify({"response": response, "status": False})
 
-
-    step = session.get("step")  # Default to "rfq_checking" if step is missing
+    # Retrieve the current step from session
+    step = session.get("step", "rfq_checking")
     print(f"User {user_id} is at step: {step}")
-    if step not in ["rfq_checking", "criteria_selection", "quote_recommendation", "quote_evaluation", "final_confirmation", "another_rfq"]:
-        print(f"Unexpected step '{step}' for user {user_id}. Logging and resetting session.")
-        # Log additional details for debugging
-        print(f"Session data: {session}")
-        delete_session_data(user_id)
-        set_session_data(user_id, {"step": "rfq_checking"})
-        return jsonify({"response": "Your session has been reset due to an invalid state. Please start again."})
 
 
     if step == "rfq_checking":
@@ -96,7 +106,9 @@ def recommend_best_quotes():
             try:
                 rfq_ids = listAllRFQs(db)
                 session["rfqs"] = rfq_ids
+                session["step"] = "rfq_checking"
                 set_session_data(user_id, session)
+
                 response = {
                     "response": conversation_chain.predict(input=quote_recomendation_list_rfq_template.format()),
                     "available_rfqs": rfq_ids,
@@ -104,90 +116,96 @@ def recommend_best_quotes():
                 return jsonify(response)
             except Exception as e:
                 session["step"] = "rfq_checking"
-                response = conversation_chain.predict(input=quote_error_fetching_rfq_list__template.format(error=str(e))),
-                return jsonify({"response":response})
+                response = conversation_chain.predict(
+                    input=quote_error_fetching_rfq_list__template.format(error=str(e))
+                )
+                return jsonify({"response": response})
 
-
-        # If match is found, proceed
-        session["selected_rfq"] = rfq  # Store as string for JSON serialization
+        # Proceed to next step if RFQ is found
+        session["selected_rfq"] = rfq
         session["selected_bids"] = getBids(rfq, db)
         session["selected_quotes"] = getQuotationsForBids(session["selected_bids"], db)
         session["step"] = "criteria_selection"
         set_session_data(user_id, session)
 
-        response = conversation_chain.predict(input=quote_recomendation_criteria_template.format(rfq_number = rfq))
+        response = conversation_chain.predict(
+            input=quote_recomendation_criteria_template.format(rfq_number=rfq)
+        )
         return jsonify({"response": response})
 
     elif step == "criteria_selection":
         criteria = user_input.strip().capitalize()
-        print(f"User selected criteria: {criteria}")
-
         valid_criteria = ["Price", "Quantity", "Balanced"]
 
         if criteria not in valid_criteria:
-            response= conversation_chain.predict(input=quote_criteria_not_valid__template.format())
+            response = conversation_chain.predict(input=quote_criteria_not_valid__template.format())
             return jsonify({"response": response})
 
-        quote_details = getQuotationDetails(session["selected_quotes"], db)
+        # Ensure quotes are available
+        quote_details = getQuotationDetails(session.get("selected_quotes", []), db)
         if not quote_details:
-            selected_rfq = session["selected_rfq"]
+            selected_rfq = session.get("selected_rfq", "unknown")
             session["step"] = "another_rfq"
             set_session_data(user_id, session)
+
             response = conversation_chain.predict(
-            input=quote_recommendation_false_template.format(selected_rfq = selected_rfq))
+                input=quote_recommendation_false_template.format(selected_rfq=selected_rfq)
+            )
             return jsonify({"response": response})
 
-        recommended_quote = evaluate_quotes(quote_details, criteria, weights=(0.4,0.6))
+        # Proceed with quote evaluation
+        recommended_quote = evaluate_quotes(quote_details, criteria, weights=(0.4, 0.6))
         session["selected_quote_id"] = recommended_quote[0]['quote']['id']
+        session["selected_criteria"] = criteria
+        session["step"] = "final_confirmation"  # Move to final_confirmation step
+        set_session_data(user_id, session)
 
         if criteria == "Price":
             criteria_match = "Lowest Price"
         elif criteria == "Quantity":
-            criteria_match="Highest Quantity"
+            criteria_match = "Highest Quantity"
         else:
-            criteria_match="Balance between Lowest Price and Hightest Quantity"
-
-        # Save the valid criteria and move to the next step
-        session["selected_criteria"] = criteria
-        session["step"] = "final_confirmation"
-        set_session_data(user_id, session)
+            criteria_match = "Balance between Lowest Price and Highest Quantity"
 
         response = conversation_chain.predict(
-            input=quote_recommendation_template.format(recommendations=recommended_quote, criteria_matched=criteria_match)
+            input=quote_recommendation_template.format(recommendations=recommended_quote, criteria_matched=criteria_match, selected_rfq=session["selected_rfq"])
         )
-        return jsonify({"response": response, "best_quotes":recommended_quote})
+        return jsonify({"response": response, "best_quotes": recommended_quote})
+
 
 
     elif step == "final_confirmation":
-        # Handle user actions: accept, reject, success
-        action = user_input.lower()
+        action = user_input.strip().lower()
         selected_quote = session.get("selected_quote_id")
 
-        # Validate session state before proceeding
         if not selected_quote:
-            print(f"Missing selected_quote_id in session for user {user_id}. Resetting session.")
+            print(f"Missing selected_quote_id in session for user {user_id}. Session: {session}")
             delete_session_data(user_id)
             set_session_data(user_id, {"step": "rfq_checking"})
             return jsonify({"response": "Session reset due to an unexpected state. Please start again."})
 
-        context = updateBidStatus(selected_quote, action, db)
+        context, status = updateBidStatus(selected_quote, action, db)
+
         if context == "Invalid":
             session["step"] = "final_confirmation"
             set_session_data(user_id, session)
             response = conversation_chain.predict(input=quote_recomendation_final_confirmation_invalid__template.format())
             return jsonify({"response": response})
 
-        if context == "Failed":
+        elif context == "Failed":
             session["step"] = "another_rfq"
             set_session_data(user_id, session)
-            response = conversation_chain.predict(input=quote_recomendation_final_confirmation_failed__template.format())
+            response = conversation_chain.predict(
+                input=quote_recomendation_final_confirmation_failed__template.format(status=status)
+            )
             return jsonify({"response": response})
 
-        if context == "Success":
+        elif context == "Success":
             session["step"] = "another_rfq"
             set_session_data(user_id, session)
             response = conversation_chain.predict(input=quote_recomendation_final_confirmation_success_template.format())
             return jsonify({"response": response})
+
 
             # Add a new branch in the main handler for "another_rfq"
     elif step == "another_rfq":

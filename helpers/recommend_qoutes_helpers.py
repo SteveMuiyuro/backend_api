@@ -14,7 +14,7 @@ def updateBidStatus(quoteId, user_input, db):
     valid_statuses = ["Accepted", "Rejected"]
     status = user_input.capitalize()  # Ensure the input is in the correct case
     if status not in valid_statuses:
-        return "Invalid"
+        return "Invalid",status
 
     # Update the status of the specific bid
     result = db.bids.update_one(
@@ -23,9 +23,9 @@ def updateBidStatus(quoteId, user_input, db):
     )
 
     if result.modified_count == 0:
-        return "Failed"
+        return "Failed", status
 
-    return "Success"
+    return "Success",status
 
 
 def getQuotationDetails(quotationIds, db):
@@ -47,7 +47,7 @@ def getQuotationDetails(quotationIds, db):
         # Query the collection to find the quotation by its ID
         result = quotation_collection.find_one(
             {"_id": quotation_id},
-            {"_id": 1, "item": 1, "quantity": 1, "unit": 1, "price": 1}
+            {"_id": 1, "item": 1, "quantity": 1, "price": 1}
         )
 
         if result:
@@ -242,13 +242,13 @@ def getPurchaseRequestTitle(purcharseRequestID, db):
 
 def listAllRFQs(db):
     bids_collection = db.bids
-    bid_lists =  bids_collection.find({}, {'_id': 0, 'request': 1, 'status': 1})
+    bid_lists =  bids_collection.find({}, {'_id': 0, 'request': 1})
 
     # Build the final list with requestId and title
     final = []
     for doc in bid_lists:
         purchase_request = doc["request"]
-        status= doc["status"]
+
 
         # Get the purchase request ID and requestId
         purchase_data = getPurchaseID(purchase_request, db)
@@ -259,7 +259,7 @@ def listAllRFQs(db):
         title = getPurchaseRequestTitle(purchase_request_id, db)
 
         # Append to final list
-        final.append({"ID": request_id, "Title": title, "Status":status})
+        final.append({"ID": request_id, "Title": title})
     print(final)
 
 

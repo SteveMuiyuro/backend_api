@@ -4,6 +4,8 @@ import os
 # redis_client = redis.Redis(host='localhost', port=6379, db=0) #Local
 redis_client = redis.Redis.from_url(os.environ.get('REDIS_URL')) #Production
 
+
+
 # Helper functions for Redis session management
 def set_session_data(user_id, data):
     redis_client.setex(f"session:{user_id}", 3600, json.dumps(data))  # Session expires in 1 hour
