@@ -148,7 +148,7 @@ def recommend_best_quotes():
 
         # Ensure quotes are available
         quote_details = getQuotationDetails(session.get("selected_quotes", []), db)
-        
+
         if not quote_details:
             selected_rfq = session.get("selected_rfq", "unknown")
             session["step"] = "another_rfq"
@@ -168,10 +168,10 @@ def recommend_best_quotes():
 
         if criteria == "Price":
             criteria_match = "Lowest Price"
-        elif criteria == "Quantity":
-            criteria_match = "Highest Quantity"
+        elif criteria == "Delivery Date":
+            criteria_match = "Earliest Delivery Date"
         else:
-            criteria_match = "Balance between Lowest Price and Highest Quantity"
+            criteria_match = "Balance between Lowest Price and earliest Delivery Date"
 
         response = conversation_chain.predict(
             input=quote_recommendation_template.format(recommendations=recommended_quote, criteria_matched=criteria_match, selected_rfq=session["selected_rfq"])

@@ -92,7 +92,7 @@ def evaluate_quotes(items, criteria, weights=None):
         }]
 
     criteria = criteria.lower()
-    if criteria not in ["price", "delivery_date", "balanced"]:
+    if criteria not in ["price", "delivery date", "balanced"]:
         raise ValueError('Criteria must be "price", "delivery_date", or "balanced".')
 
     if weights is None:
