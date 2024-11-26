@@ -118,7 +118,7 @@ def evaluate_quotes(items, criteria, weights=None):
         ]
 
     # Earliest Delivery Date (Handle ties)
-    elif criteria == "delivery_date":
+    elif criteria == "delivery date":
         earliest_date = min(item["delivery_date"] for item in items)
         best_date_items = [item for item in items if item["delivery_date"] == earliest_date]
         return [

@@ -50,7 +50,7 @@ quote_another_rfq_invalid_response__template = PromptTemplate(
 )
 
 quote_criteria_not_valid__template = PromptTemplate(
-    template="Let the user know that the input is invalid and that they should kindly choose either of Price, Quantity or Balanced as the only acceptable options"
+    template="Let the user know that the input is invalid and that they should kindly choose either of Price, Delivery Date or Balanced as the only acceptable options"
 )
 
 quote_error_fetching_rfq_list__template = PromptTemplate(
