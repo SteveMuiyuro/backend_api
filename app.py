@@ -140,7 +140,7 @@ def recommend_best_quotes():
 
     elif step == "criteria_selection":
         criteria = user_input.strip().capitalize()
-        valid_criteria = ["Price", "Delivery Date", "Balanced"]
+        valid_criteria = ["Price", "Delivery", "Balanced"]
 
         if criteria not in valid_criteria:
             response = conversation_chain.predict(input=quote_criteria_not_valid__template.format())
@@ -168,7 +168,7 @@ def recommend_best_quotes():
 
         if criteria == "Price":
             criteria_match = "Lowest Price"
-        elif criteria == "Delivery Date":
+        elif criteria == "Delivery":
             criteria_match = "Earliest Delivery Date"
         else:
             criteria_match = "Balance between Lowest Price and earliest Delivery Date"

@@ -11,7 +11,7 @@ quote_recomendation_list_rfq_template = PromptTemplate(
 )
 
 quote_recomendation_criteria_template = PromptTemplate(
-    template="Acknowledge the RFQ ID: {rfq_number} selected by the user, ask the user to select the criteria they prefer for recommending quotes based on three choices Price, Delivery Date, or Balanced With price being quote with the lowest price, delivery date being quote with the earliest date of delivery and  balanced being the best combination of the two. Please be brief and don't use asterisk inside the sentenses"
+    template="Acknowledge the RFQ ID: {rfq_number} selected by the user, ask the user to select the criteria they prefer for recommending quotes based on three choices Price, Delivery, or Balanced With price being quote with the lowest price, delivery being quote with the earliest date of delivery and  balanced being the best combination of the two. Please be brief and don't use asterisk inside the sentenses"
 )
 
 quote_recommendation_false_template = PromptTemplate(
@@ -27,8 +27,7 @@ quote_exit_template = PromptTemplate(
 )
 
 quote_recommendation_template = PromptTemplate(
-    input_variables=["recommendations"],
-    template="Let the user know that based on selected criteria, the best quotes for the RFQ:{selected_rfq} as listed below is are is for:{recommendations} Please dont include the quote ID or currency symbol on unit price. The criteria matched is : {criteria_matched} simply ask the user if they Would like you to have the RFQ associated to this quote Accepted or rejected?"
+    template="Let the user know that based on selected criteria, the best quotes for the RFQ:{selected_rfq} as listed below is are is for:{recommendations} Please dont include the quote ID or currency symbol on unit price if the recommendations are multiple, just list the number of results and the {criteria_matched}. The criteria matched is : {criteria_matched} simply ask the user if they Would like you to have the RFQ associated to this quote Accepted or rejected?"
 )
 
 quote_recomendation_final_confirmation_invalid__template = PromptTemplate(
@@ -50,7 +49,7 @@ quote_another_rfq_invalid_response__template = PromptTemplate(
 )
 
 quote_criteria_not_valid__template = PromptTemplate(
-    template="Let the user know that the input is invalid and that they should kindly choose either of Price, Delivery Date or Balanced as the only acceptable options"
+    template="Let the user know that the input is invalid and that they should kindly choose either of Price, Delivery or Balanced as the only acceptable options"
 )
 
 quote_error_fetching_rfq_list__template = PromptTemplate(

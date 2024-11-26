@@ -92,8 +92,8 @@ def evaluate_quotes(items, criteria, weights=None):
         }]
 
     criteria = criteria.lower()
-    if criteria not in ["price", "delivery date", "balanced"]:
-        raise ValueError('Criteria must be "price", "delivery_date", or "balanced".')
+    if criteria not in ["price", "delivery", "balanced"]:
+        raise ValueError('Criteria must be "price", "delivery", or "balanced".')
 
     if weights is None:
         weights = (0.5, 0.5)
@@ -118,7 +118,7 @@ def evaluate_quotes(items, criteria, weights=None):
         ]
 
     # Earliest Delivery Date (Handle ties)
-    elif criteria == "delivery date":
+    elif criteria == "delivery":
         earliest_date = min(item["delivery_date"] for item in items)
         best_date_items = [item for item in items if item["delivery_date"] == earliest_date]
         return [
