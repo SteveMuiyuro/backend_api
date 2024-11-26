@@ -207,10 +207,13 @@ def getBids(requestForID, db):
     return bids
 
 def getQuotationsForBids(bidIds, db):
-    # Initialize a list to store dictionaries for quotations
-    quotations_with_details = []
+    # Initialize a list to store all quotations with details for all bids
+    quotations_with_details_for_all_bids = []
 
     for bidId in bidIds:
+        # Initialize a list to store quotations for the current bid
+        quotations_with_details_one_bid = []
+
         # Ensure the bidId is a valid ObjectId (if it's a string, convert it)
         if isinstance(bidId, str):
             try:
@@ -223,7 +226,10 @@ def getQuotationsForBids(bidIds, db):
         bids_collection = db.bids
 
         # Query the bids collection to find the quotations, vendor, and delivery date for the given bidId
-        result = bids_collection.find_one({"_id": bidId}, {"quotations": 1, "vendor": 1, "deliveryDate": 1, "_id": 0})
+        result = bids_collection.find_one(
+            {"_id": bidId},
+            {"quotations": 1, "vendor": 1, "deliveryDate": 1, "_id": 0}
+        )
 
         if result:
             # Extract the values
@@ -237,26 +243,29 @@ def getQuotationsForBids(bidIds, db):
                     quotation_detail = {
                         "Quote_id": str(q),  # Convert ObjectId to string
                         "delivery_date": delivery_date.isoformat() if delivery_date else None,  # Convert to ISO 8601 format
-                        "vendor": get_user_name(vendor, db)
+                        "vendor": get_user_name(vendor, db)  # Replace vendor ID with name
                     }
-                    quotations_with_details.append(quotation_detail)
+                    quotations_with_details_one_bid.append(quotation_detail)
             else:
                 # Handle the case where no quotations exist
-                quotations_with_details.append({
+                quotations_with_details_one_bid.append({
                     "Quote_id": [],
                     "delivery_date": delivery_date.isoformat() if delivery_date else None,
                     "vendor": vendor
                 })
         else:
             # If no result is found for the bidId, append a placeholder dictionary
-            quotations_with_details.append({
+            quotations_with_details_one_bid.append({
                 "Quote_id": [],
                 "delivery_date": None,
                 "vendor": None
             })
 
+        # Append the details for this bid to the overall list
+        quotations_with_details_for_all_bids.extend(quotations_with_details_one_bid)
+
     # Return the list of dictionaries
-    return quotations_with_details
+    return quotations_with_details_for_all_bids
 
 def getPurchaseID(requestForID, db):
     request_document = db.requestfors
@@ -316,3 +325,40 @@ def get_user_name(user_id, db):
             return {"error": "User not found"}
     except Exception as e:
         return {"error": str(e)}
+
+def get_best_quotes(quotations):
+    # Ensure input is not empty
+    if not quotations:
+        return {"lowest_price": [], "earliest_delivery_date": []}
+
+    # Initialize variables
+    lowest_price = float('inf')
+    earliest_delivery_date = datetime.max
+    quotes_with_lowest_price = []
+    quotes_with_earliest_delivery = []
+
+    # Process quotations
+    for quote in quotations:
+        price = quote.get('price', float('inf'))
+        delivery_date_str = quote.get('delivery_date', None)
+        delivery_date = datetime.fromisoformat(delivery_date_str) if delivery_date_str else datetime.max
+
+        # Check for lowest price
+        if price < lowest_price:
+            lowest_price = price
+            quotes_with_lowest_price = [quote]
+        elif price == lowest_price:
+            quotes_with_lowest_price.append(quote)
+
+        # Check for earliest delivery date
+        if delivery_date < earliest_delivery_date:
+            earliest_delivery_date = delivery_date
+            quotes_with_earliest_delivery = [quote]
+        elif delivery_date == earliest_delivery_date:
+            quotes_with_earliest_delivery.append(quote)
+
+    # Return results
+    return {
+        "lowest_price": quotes_with_lowest_price,
+        "earliest_delivery_date": quotes_with_earliest_delivery,
+    }

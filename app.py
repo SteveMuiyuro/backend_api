@@ -14,7 +14,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from helpers.product_prices_helpers import  detect_product_query, get_product_price_data, query_general
 from helpers.get_product_prices_helpers import get_session_data, set_session_data, delete_session_data
-from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus
+from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_exit_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template
 app = Flask(__name__, static_folder='static')
@@ -48,6 +48,18 @@ conversation_chain = ConversationChain(
 
 # ThreadPoolExecutor for concurrent API calls
 executor = ThreadPoolExecutor(max_workers=10)
+
+@app.route('/recommended_quotes_overview', methods=['POST'])
+def recommended_best_quotes_overview():
+    user_id = request.json.get('userId')
+    rfq_no = request.json.get('rfq_no')
+    user_name = request.json.get('userName')
+    all_associated_bids = getBids(rfq_no, db)
+    quotations = getQuotationsForBids(all_associated_bids, db)
+    quotation_details = getQuotationDetails(quotations, db)
+    recommended_quotes = get_best_quotes(quotation_details)
+    print(quotation_details)
+    return jsonify({"response":recommended_quotes})
 
 
 # Route for recommending best quotes
