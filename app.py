@@ -29,6 +29,8 @@ MONGO_URL = os.getenv("MONGO_URI")
 client = MongoClient(MONGO_URL)
 db = client.sourcify
 
+
+
 # Initialize OpenAI's GPT-4 model
 llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
 
@@ -121,10 +123,13 @@ def recommend_best_quotes():
                 )
                 return jsonify({"response": response})
 
+
+
         # Proceed to next step if RFQ is found
         session["selected_rfq"] = rfq
         session["selected_bids"] = getBids(rfq, db)
-        session["selected_quotes"] = getQuotationsForBids(session["selected_bids"], db)
+        quotations = getQuotationsForBids(session["selected_bids"], db)
+        session["selected_quotes"] = quotations
         session["step"] = "criteria_selection"
         set_session_data(user_id, session)
 
@@ -135,7 +140,7 @@ def recommend_best_quotes():
 
     elif step == "criteria_selection":
         criteria = user_input.strip().capitalize()
-        valid_criteria = ["Price", "Quantity", "Balanced"]
+        valid_criteria = ["Price", "Delivery Date", "Balanced"]
 
         if criteria not in valid_criteria:
             response = conversation_chain.predict(input=quote_criteria_not_valid__template.format())
@@ -143,6 +148,7 @@ def recommend_best_quotes():
 
         # Ensure quotes are available
         quote_details = getQuotationDetails(session.get("selected_quotes", []), db)
+        
         if not quote_details:
             selected_rfq = session.get("selected_rfq", "unknown")
             session["step"] = "another_rfq"

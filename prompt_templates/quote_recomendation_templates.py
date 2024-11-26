@@ -11,7 +11,7 @@ quote_recomendation_list_rfq_template = PromptTemplate(
 )
 
 quote_recomendation_criteria_template = PromptTemplate(
-    template="Acknowledge the RFQ ID: {rfq_number} selected by the user, ask the user to select the criteria they prefer for recommending quotes based on three choices Price, Quantity, or Balanced With price being quote with the lowest price,quantity being quote with the highest quantity and  balanced being the best combination of the two. Please be brief and don't use asterisk inside the sentenses"
+    template="Acknowledge the RFQ ID: {rfq_number} selected by the user, ask the user to select the criteria they prefer for recommending quotes based on three choices Price, Delivery Date, or Balanced With price being quote with the lowest price, delivery date being quote with the earliest date of delivery and  balanced being the best combination of the two. Please be brief and don't use asterisk inside the sentenses"
 )
 
 quote_recommendation_false_template = PromptTemplate(

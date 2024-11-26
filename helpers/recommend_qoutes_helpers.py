@@ -1,5 +1,6 @@
 from bson import ObjectId
 import ast
+from datetime import datetime
 
 def updateBidStatus(quoteId, user_input, db):
     # Fetch the quotation by its ID
@@ -28,25 +29,30 @@ def updateBidStatus(quoteId, user_input, db):
     return "Success",status
 
 
-def getQuotationDetails(quotationIds, db):
+def getQuotationDetails(quotations, db):
     # Initialize a list to store the filtered details of quotations
     quotation_details = []
 
-    for quotation_id in quotationIds:
-        # Ensure the quotation_id is a valid ObjectId (if it's a string, convert it)
-        if isinstance(quotation_id, str):
-            try:
-                quotation_id = ObjectId(quotation_id)  # Convert to ObjectId from string
-            except Exception as e:
-                print(f"Invalid ObjectId format: {quotation_id} - {e}")
-                continue
+    for quote in quotations:
+        # Ensure the key matches: change "Quote_Id" to "Quote_id"
+        quote_id_raw = quote.get("Quote_id")  # Use correct key
+        if not quote_id_raw:
+            print(f"Missing Quote_id in quote: {quote}")
+            continue
+
+        # Ensure the Quote_id is a valid ObjectId
+        try:
+            quote_id = ObjectId(quote_id_raw) if isinstance(quote_id_raw, str) else quote_id_raw
+        except Exception as e:
+            print(f"Invalid ObjectId format: {quote_id_raw} - {e}")
+            continue
 
         # Access the quotations collection
         quotation_collection = db.quotations
 
         # Query the collection to find the quotation by its ID
         result = quotation_collection.find_one(
-            {"_id": quotation_id},
+            {"_id": quote_id},
             {"_id": 1, "item": 1, "quantity": 1, "price": 1}
         )
 
@@ -54,36 +60,49 @@ def getQuotationDetails(quotationIds, db):
             # Convert ObjectId to string for JSON compatibility
             result["id"] = str(result["_id"])  # Add stringified ID as "id"
             del result["_id"]  # Optionally remove the original "_id"
+
+            # Add delivery_date and vendor from the input `quote`
+            result["delivery_date"] = quote.get("delivery_date", "Not provided")
+            result["vendor"] = quote.get("vendor", "Not provided")
+
+            # Append the result to the quotation details
             quotation_details.append(result)
-            return quotation_details
         else:
-            return None
+            print(f"No result found for Quote_id: {quote_id}")
+    return quotation_details if quotation_details else None
+
+
 
 
 def evaluate_quotes(items, criteria, weights=None):
     if not isinstance(items, list) or len(items) == 0:
         raise ValueError("The items list must contain at least one item.")
 
+    # Convert delivery_date strings to datetime objects
+    for item in items:
+        if isinstance(item.get("delivery_date"), str):
+            item["delivery_date"] = datetime.strptime(item["delivery_date"], "%Y-%m-%dT%H:%M:%S")
+
     # Handle the single-item case
     if len(items) == 1:
         single_item = items[0]
         return [{
-            "quote":single_item,
+            "quote": single_item,
             "criteria_matched": "Only item in the list",
         }]
 
     criteria = criteria.lower()
-    if criteria not in ["price", "quantity", "balanced"]:
-        raise ValueError('Criteria must be "price", "quantity", or "balanced".')
+    if criteria not in ["price", "delivery_date", "balanced"]:
+        raise ValueError('Criteria must be "price", "delivery_date", or "balanced".')
 
     if weights is None:
         weights = (0.5, 0.5)
 
     if not isinstance(weights, tuple) or len(weights) != 2:
-        raise TypeError("Weights must be a tuple of two values (price_weight, quantity_weight).")
+        raise TypeError("Weights must be a tuple of two values (price_weight, date_weight).")
 
-    price_weight, quantity_weight = weights
-    if not (0 <= price_weight <= 1 and 0 <= quantity_weight <= 1 and price_weight + quantity_weight == 1):
+    price_weight, date_weight = weights
+    if not (0 <= price_weight <= 1 and 0 <= date_weight <= 1 and price_weight + date_weight == 1):
         raise ValueError("Weights must be between 0 and 1 and sum to 1.")
 
     # Lowest Price (Handle ties)
@@ -98,27 +117,27 @@ def evaluate_quotes(items, criteria, weights=None):
             for item in best_price_items
         ]
 
-    # Highest Quantity (Handle ties)
-    elif criteria == "quantity":
-        max_quantity = max(item["quantity"] for item in items)
-        best_quantity_items = [item for item in items if item["quantity"] == max_quantity]
+    # Earliest Delivery Date (Handle ties)
+    elif criteria == "delivery_date":
+        earliest_date = min(item["delivery_date"] for item in items)
+        best_date_items = [item for item in items if item["delivery_date"] == earliest_date]
         return [
             {
                 "quote": item,
-                "criteria_matched": "Highest Quantity",
+                "criteria_matched": "Earliest Delivery Date",
             }
-            for item in best_quantity_items
+            for item in best_date_items
         ]
 
-    # Balanced Price and Quantity (Handle ties)
+    # Balanced Price and Delivery Date (Handle ties)
     elif criteria == "balanced":
-        max_quantity = max(item["quantity"] for item in items)
         min_price = min(item["price"] for item in items)
+        earliest_date = min(item["delivery_date"] for item in items)
 
         def weighted_score(item):
             normalized_price = (min_price / item["price"])  # Inverse normalization for price
-            normalized_quantity = (item["quantity"] / max_quantity)
-            return (price_weight * normalized_price) + (quantity_weight * normalized_quantity)
+            normalized_date = (earliest_date.timestamp() / item["delivery_date"].timestamp())  # Inverse normalization for date
+            return (price_weight * normalized_price) + (date_weight * normalized_date)
 
         # Calculate scores for all items
         scores = [(item, weighted_score(item)) for item in items]
@@ -129,11 +148,10 @@ def evaluate_quotes(items, criteria, weights=None):
         return [
             {
                 "quote": item,
-                "criteria_matched": "Balanced Price and Quantity",
+                "criteria_matched": "Balanced Price and Delivery Date",
             }
             for item in best_balanced_items
         ]
-
 
 def find_request_id(input_value, db):
     try:
@@ -189,8 +207,8 @@ def getBids(requestForID, db):
     return bids
 
 def getQuotationsForBids(bidIds, db):
-    # Initialize an empty list to store the quotations for each bid
-    all_quotations = []
+    # Initialize a list to store dictionaries for quotations
+    quotations_with_details = []
 
     for bidId in bidIds:
         # Ensure the bidId is a valid ObjectId (if it's a string, convert it)
@@ -199,23 +217,46 @@ def getQuotationsForBids(bidIds, db):
                 bidId = ObjectId(bidId)  # Convert to ObjectId from string
             except Exception as e:
                 print(f"Invalid ObjectId format: {bidId} - {e}")
-                all_quotations.append("Invalid ObjectId format")
                 continue
 
+        # Access the bids collection
         bids_collection = db.bids
 
-        # Query the bids collection to find the quotations for the given bidId
-        result = bids_collection.find_one({"_id": bidId}, {"quotations": 1, "_id": 0})
+        # Query the bids collection to find the quotations, vendor, and delivery date for the given bidId
+        result = bids_collection.find_one({"_id": bidId}, {"quotations": 1, "vendor": 1, "deliveryDate": 1, "_id": 0})
 
-        if result and 'quotations' in result:
-            # If quotations exist for the bid, add them as a list of strings
-            quotation_ids = [str(quotation_id) for quotation_id in result['quotations']]
-            all_quotations.extend(quotation_ids)  # Add the quotations to the result list
+        if result:
+            # Extract the values
+            delivery_date = result.get("deliveryDate", None)
+            vendor = result.get("vendor", None)
+            quotations = result.get("quotations", [])
+
+            if quotations:
+                # Create a dictionary for each quotation ID with delivery date and vendor
+                for q in quotations:
+                    quotation_detail = {
+                        "Quote_id": str(q),  # Convert ObjectId to string
+                        "delivery_date": delivery_date.isoformat() if delivery_date else None,  # Convert to ISO 8601 format
+                        "vendor": get_user_name(vendor, db)
+                    }
+                    quotations_with_details.append(quotation_detail)
+            else:
+                # Handle the case where no quotations exist
+                quotations_with_details.append({
+                    "Quote_id": [],
+                    "delivery_date": delivery_date.isoformat() if delivery_date else None,
+                    "vendor": vendor
+                })
         else:
-            # If no quotations are found, add an empty list
-            all_quotations.extend([])
+            # If no result is found for the bidId, append a placeholder dictionary
+            quotations_with_details.append({
+                "Quote_id": [],
+                "delivery_date": None,
+                "vendor": None
+            })
 
-    return all_quotations
+    # Return the list of dictionaries
+    return quotations_with_details
 
 def getPurchaseID(requestForID, db):
     request_document = db.requestfors
@@ -264,3 +305,14 @@ def listAllRFQs(db):
 
 
     return final
+
+def get_user_name(user_id, db):
+    try:
+        # Find the user in the collection
+        user = db.users.find_one({"_id": user_id}, {"firstName": 1, "lastName": 1, "_id": 0})
+        if user:
+            return user
+        else:
+            return {"error": "User not found"}
+    except Exception as e:
+        return {"error": str(e)}
