@@ -31,6 +31,7 @@ db = client.sourcify
 
 
 
+
 # Initialize OpenAI's GPT-4 model
 llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
 
@@ -58,7 +59,6 @@ def recommended_best_quotes_overview():
     quotations = getQuotationsForBids(all_associated_bids, db)
     quotation_details = getQuotationDetails(quotations, db)
     recommended_quotes = get_best_quotes(quotation_details)
-    print(quotation_details)
     return jsonify({"response":recommended_quotes})
 
 
