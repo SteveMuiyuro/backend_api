@@ -3,7 +3,7 @@ from langchain.prompts import PromptTemplate
 # Define prompt Get Product templates for each conversation step
 greeting_template = PromptTemplate(
     input_variables=["user_name"],
-    template="Start by greeting  {user_name}! introduce yourself as Sarm the user's assistant in providing product prices and then proceed and ask the user to provide the details of the specific product they are looking for?"
+    template="Start by greeting  {user_name}! introduce yourself as Sarm the user's assistant in providing product prices and then proceed and simply ask the user to provide the details of the specific product they are looking for?"
 )
 
 location_template = PromptTemplate(
@@ -28,3 +28,6 @@ another_product_template = PromptTemplate(
 )
 
 #
+another_product_invalid_response_template = PromptTemplate(
+    template="Let the user know that you didn't quite get that, Request the user to type yes to proceed or no to cancel the session and exit"
+)

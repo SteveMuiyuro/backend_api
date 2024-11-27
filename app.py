@@ -15,8 +15,8 @@ from pymongo import MongoClient
 from helpers.product_prices_helpers import  detect_product_query, get_product_price_data, query_general
 from helpers.get_product_prices_helpers import get_session_data, set_session_data, delete_session_data
 from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes, extract_number, extract_keywords, check_status, check_review_response
-from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template
-from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_exit_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template
+from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template,another_product_invalid_response_template
+from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_exit_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
 app = Flask(__name__, static_folder='static')
 CORS(app)
 load_dotenv()
@@ -246,12 +246,13 @@ def recommend_best_quotes():
                 input=quote_another_rfq_invalid_response__template.format()
             )
             return jsonify({"response": response})
-
-
     # Unhandled step
     delete_session_data(user_id)
     set_session_data(user_id, {"step": "rfq_selection"})
-    return jsonify({"response": "Session reset due to an unexpected state. Please start again."})
+    response  = conversation_chain.predict(
+                input=quote_session_reset_template.format()
+            )
+    return jsonify({"response": response})
 
 
 @app.route('/get_product_prices', methods=['POST'])
@@ -309,7 +310,8 @@ def get_product_prices():
         return response_json
 
     elif step == "another_product":
-        if user_input.lower() == "yes":
+        action = check_review_response(user_input)
+        if action == "yes":
              # Reset session for a new search and keep the user's name
             delete_session_data(user_id)
             set_session_data(user_id, {"step": "product"})
@@ -317,10 +319,14 @@ def get_product_prices():
             # Send the introductory message again for a new search
             response = conversation_chain.predict(input=another_product_template.format(user_name=user_name))
             return jsonify({"response": response})
-        else:
+        elif action == "no":
             delete_session_data(user_id)
             response = conversation_chain.predict(input=exit_template.format())
             return jsonify({"response": response, "exit": True})
+        else:
+            response = conversation_chain.predict(input=another_product_invalid_response_template.format())
+            return jsonify({"response": response})
+
 
     # If step is unrecognized, reset to initial state
     delete_session_data(user_id)

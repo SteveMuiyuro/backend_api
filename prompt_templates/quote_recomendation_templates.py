@@ -55,3 +55,7 @@ quote_criteria_not_valid__template = PromptTemplate(
 quote_error_fetching_rfq_list__template = PromptTemplate(
     template="Let the user know that there was an {error} fetching RFQ list and request them to type the RFQ ID again "
 )
+
+quote_session_reset_template = PromptTemplate(
+    template="Let the user know that there has been a session reset due to an unxpected state. Request the user to renetr the RFQ ID"
+)

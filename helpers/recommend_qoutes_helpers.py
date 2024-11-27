@@ -410,7 +410,7 @@ def check_status(input_text):
 def check_review_response(user_input):
     # Define yes-like and no-like keywords
     yes_keywords = ["yes", "another", "sure", "okay", "yep", "yup", "affirmative", "yeah", "alright"]
-    no_keywords = ["no", "not", "nope", "never", "nah", "negative", "none"]
+    no_keywords = ["no", "not", "nope", "never", "nah", "negative", "none", "cancel"]
 
     # Compile regex patterns for both groups (case-insensitive)
     yes_pattern = r'\b(?:' + '|'.join(yes_keywords) + r')\b'
