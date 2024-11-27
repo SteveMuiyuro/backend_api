@@ -22,12 +22,8 @@ quote_another_rfq_template = PromptTemplate(
     template="You can start your sentence with Awesome {user_name}, cool {user_name} or any other word that shows excitement to proceed, proceed and request the user  to enter a new RFQ ID"
 )
 
-quote_exit_template = PromptTemplate(
-    template="Say Thank you! to the user and let them know that they can always reach out if they need more assistance"
-)
-
 quote_recommendation_template = PromptTemplate(
-    template="Let the user know that based on selected criteria, you have found, state the number of results inside {recommendations} as the best quotes for the RFQ:{selected_rfq} just state the delivery date and the price per unit. E.g I have found 2 relts with a unit price of x amount and a delivery date of x you dont have to list all details. Please dont include the quote ID or currency symbol on unit price. If the recommendations are multiple, just list the number of results and the {criteria_matched}. The criteria matched is {criteria_matched}. Simply ask the user if they Would like you to have the RFQ associated to this quote Accepted or rejected?"
+    template="Let the user know that based on selected criteria, you have found, state the number of results inside {recommendations} as the best quotes for the RFQ:{selected_rfq} just state the delivery date and the price per unit. E.g I have found 2 results with a unit price of x amount and a delivery date of x you dont have to list all details. Please dont include the quote ID or currency symbol on unit price. If the recommendations are multiple, just list the number of results and the {criteria_matched}. The criteria matched is {criteria_matched}. Simply ask the user if they Would like you to have the RFQ associated to this quote Accepted or rejected?"
 )
 
 quote_recomendation_final_confirmation_invalid__template = PromptTemplate(
@@ -57,5 +53,5 @@ quote_error_fetching_rfq_list__template = PromptTemplate(
 )
 
 quote_session_reset_template = PromptTemplate(
-    template="Let the user know that there has been a session reset due to an unxpected state. Request the user to renetr the RFQ ID"
+    template="Let the user know that there has been a session reset due to an unexpected state and that you will have to restart the process again. Request the user to reenter the RFQ ID"
 )

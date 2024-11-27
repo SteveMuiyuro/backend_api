@@ -7,6 +7,7 @@ from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import SystemMessage
 from flask import Flask, request, jsonify
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from concurrent.futures import ThreadPoolExecutor
 from jsonschema import  ValidationError
@@ -15,8 +16,10 @@ from pymongo import MongoClient
 from helpers.product_prices_helpers import  detect_product_query, get_product_price_data, query_general
 from helpers.get_product_prices_helpers import get_session_data, set_session_data, delete_session_data
 from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes, extract_number, extract_keywords, check_status, check_review_response
+from helpers.create_request_helpers import generate_random_string,validate_input, detect_priority
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template,another_product_invalid_response_template
-from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_exit_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
+from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
+from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template
 app = Flask(__name__, static_folder='static')
 CORS(app)
 load_dotenv()
@@ -28,6 +31,7 @@ MONGO_URL = os.getenv("MONGO_URI")
 # MongoDB setup
 client = MongoClient(MONGO_URL)
 db = client.sourcify
+purchase_requests_collection = db.requests
 
 
 # Initialize OpenAI's GPT-4 model
@@ -35,7 +39,7 @@ llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
 
 # Set up memory for conversation
 memory = ConversationBufferMemory(return_messages=True,  initial_messages=[
-        SystemMessage(content="You are a friendly assistant helping the user on various issues from getting prices for various products to creating requesrs and RFQ assignments.")
+        SystemMessage(content="You are a friendly mongo database assistant helping the user on various issues from getting prices for various products to creating requests and RFQ assignments.")
     ])
 
 # Define the conversation chain with memory
@@ -47,6 +51,127 @@ conversation_chain = ConversationChain(
 
 # ThreadPoolExecutor for concurrent API calls
 executor = ThreadPoolExecutor(max_workers=10)
+
+@app.route('/create_request', methods=['POST'])
+def create_request():
+    user_id = request.json.get('userId')
+    user_input = request.json.get('message')
+    user_name = request.json.get('userName')
+
+
+    # Fetch or initialize session data
+    session = get_session_data(user_id) or {
+        "step": "start",
+        "due_date": None,
+        "reason": None,
+        "priority": None,
+        "items": None
+    }
+
+    current_step = session["step"]
+
+    # Reset session on "start" command
+    if user_input.lower() == "start" or current_step == "start":
+        delete_session_data(user_id)
+        session = {"step": "due_date"}
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_request_greetings_template_template.format(user_name=user_name)
+        )
+        return jsonify({"response": response})
+
+    # Validate user input
+    is_valid, error_msg = validate_input(current_step, user_input, create_request_invalid_date_template_template,create_request_invalid_format_date_template_template,create_request_invalid_priority_template_template,conversation_chain)
+    if not is_valid:
+        return jsonify({"response": error_msg})
+
+    # Handle step transitions
+    if current_step == "due_date":
+        session["due_date"] = user_input
+        session["step"] = "reason"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_request_reason_template_template.format(input=session["due_date"])
+        )
+        return jsonify({"response": response})
+
+    elif current_step == "reason":
+        session["reason"] = user_input
+        session["step"] = "priority"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_request_priority_template_template.format(input=session["reason"]))
+
+        return jsonify({"response": response})
+
+    elif current_step == "priority":
+        action = detect_priority(user_input)
+        if action:
+            session["priority"] = action
+        session["step"] = "items"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_request_recored_items_template_template.format(input=session["priority"]))
+
+        return jsonify({"response": response})
+
+    elif current_step == "items":
+        session["items"] = user_input
+        session["step"] = "confirmation"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_request_summary_template.format(due_date=session["due_date"], reason=session["reason"], priority=session["priority"], items=session["items"]))
+        return jsonify({"response": response})
+
+    elif current_step == "confirmation":
+        if user_input.lower() in ["yes", "submit"]:
+            # Save to database
+            pr_id = generate_random_string()
+            request_data = {
+                "title": f"PR-{pr_id}-{session['items']}",
+                "dueDate": session["due_date"],
+                "reason": session["reason"],
+                "priority": session["priority"],
+                "items": session["items"],
+                "status": "submitted",
+                "createdAt": datetime.now(timezone.utc),
+                "updatedAt": datetime.now(timezone.utc),
+                "requestId": f"PR-{pr_id}",
+                "userId": user_id
+            }
+            purchase_requests_collection.insert_one(request_data)
+            delete_session_data(user_id)
+            session = {"step": "another_request"}
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+            input=create_request_another_template.format(input=pr_id))
+            return jsonify({"response": response})
+        elif user_input.lower() in ["no", "cancel"]:
+            delete_session_data(user_id)
+            response = conversation_chain.predict(
+            input=create_request_cancel_template.format(input=pr_id))
+            return jsonify({"response": response})
+
+    elif current_step == "another_request":
+        if user_input.lower() == "yes":
+            delete_session_data(user_id)
+            session = {"step": "due_date"}
+            set_session_data(user_id, session)
+            return jsonify({"response": "When is the due date for the request?"})
+        elif user_input.lower() == "no":
+            delete_session_data(user_id)
+            response= conversation_chain.predict(
+                input=exit_template.format()
+            )
+            return jsonify({"response": response, "exit": True})
+    response=  response= conversation_chain.predict(
+                input=create_request_session_reset_template.format()
+            )
+    delete_session_data(user_id)
+    set_session_data(user_id, {"step":"due_date"})
+    # Fallback for unrecognized input
+    return jsonify({"response":response})
+
 
 @app.route('/recommended_quotes_overview', methods=['POST'])
 def recommended_best_quotes_overview():
@@ -95,7 +220,7 @@ def recommend_best_quotes():
         response = conversation_chain.predict(
             input=quote_recomendation_greeting_template.format(user_name=user_name)
         )
-        return jsonify({"response": response, "status": False})
+        return jsonify({"response": response})
 
     # Check and update greeting status
     if not session.get("greeting_sent"):
@@ -104,7 +229,7 @@ def recommend_best_quotes():
         response = conversation_chain.predict(
             input=quote_recomendation_greeting_template.format(user_name=user_name)
         )
-        return jsonify({"response": response, "status": False})
+        return jsonify({"response": response})
 
     # Retrieve the current step from session
     step = session.get("step", "rfq_checking")
@@ -132,8 +257,6 @@ def recommend_best_quotes():
                     input=quote_error_fetching_rfq_list__template.format(error=str(e))
                 )
                 return jsonify({"response": response})
-
-
 
         # Proceed to next step if RFQ is found
         session["selected_rfq"] = rfq
@@ -237,7 +360,7 @@ def recommend_best_quotes():
         elif action == "no":
             delete_session_data(user_id)
             response = conversation_chain.predict(
-                input=quote_exit_template.format()
+                input=exit_template.format()
             )
             return jsonify({"response": response, "exit": True})
         else:
