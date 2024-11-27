@@ -14,7 +14,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from helpers.product_prices_helpers import  detect_product_query, get_product_price_data, query_general
 from helpers.get_product_prices_helpers import get_session_data, set_session_data, delete_session_data
-from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes
+from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes, extract_number, extract_keywords, check_status, check_review_response
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_exit_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template
 app = Flask(__name__, static_folder='static')
@@ -28,8 +28,6 @@ MONGO_URL = os.getenv("MONGO_URI")
 # MongoDB setup
 client = MongoClient(MONGO_URL)
 db = client.sourcify
-
-
 
 
 # Initialize OpenAI's GPT-4 model
@@ -114,7 +112,7 @@ def recommend_best_quotes():
 
 
     if step == "rfq_checking":
-        rfq_input = user_input.strip()
+        rfq_input = str(extract_number(user_input))
         rfq = find_request_id(rfq_input, db)
         if not rfq:
             try:
@@ -151,7 +149,7 @@ def recommend_best_quotes():
         return jsonify({"response": response})
 
     elif step == "criteria_selection":
-        criteria = user_input.strip().capitalize()
+        criteria = extract_keywords(user_input)
         valid_criteria = ["Price", "Delivery", "Balanced"]
 
         if criteria not in valid_criteria:
@@ -193,7 +191,7 @@ def recommend_best_quotes():
 
 
     elif step == "final_confirmation":
-        action = user_input.strip().lower()
+        action = check_status(user_input)
         selected_quote = session.get("selected_quote_id")
 
         if not selected_quote:
@@ -227,7 +225,7 @@ def recommend_best_quotes():
 
             # Add a new branch in the main handler for "another_rfq"
     elif step == "another_rfq":
-        action = user_input.lower()
+        action = check_review_response(user_input)
         if action == "yes":
             greeting_sent = session.get("greeting_sent", True)  # Default to True for safety
             delete_session_data(user_id)

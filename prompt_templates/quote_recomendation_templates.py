@@ -27,7 +27,7 @@ quote_exit_template = PromptTemplate(
 )
 
 quote_recommendation_template = PromptTemplate(
-    template="Let the user know that based on selected criteria, the best quotes for the RFQ:{selected_rfq} as listed below is are is for:{recommendations} Please dont include the quote ID or currency symbol on unit price if the recommendations are multiple, just list the number of results and the {criteria_matched}. The criteria matched is : {criteria_matched} simply ask the user if they Would like you to have the RFQ associated to this quote Accepted or rejected?"
+    template="Let the user know that based on selected criteria, you have found, state the number of results inside {recommendations} as the best quotes for the RFQ:{selected_rfq} just state the delivery date and the price per unit. E.g I have found 2 relts with a unit price of x amount and a delivery date of x you dont have to list all details. Please dont include the quote ID or currency symbol on unit price. If the recommendations are multiple, just list the number of results and the {criteria_matched}. The criteria matched is {criteria_matched}. Simply ask the user if they Would like you to have the RFQ associated to this quote Accepted or rejected?"
 )
 
 quote_recomendation_final_confirmation_invalid__template = PromptTemplate(
@@ -36,12 +36,12 @@ quote_recomendation_final_confirmation_invalid__template = PromptTemplate(
 
 
 quote_recomendation_final_confirmation_failed__template = PromptTemplate(
-    template="Respond to the user that RFQ status is already updated as {status}. ASk the user if they would want to review another RFQ by typing yes or no"
+    template="Respond to the user that RFQ status is already updated as {status}. ASk the user if they would want to review another RFQ"
 )
 
 
 quote_recomendation_final_confirmation_success_template = PromptTemplate(
-    template="Respond to the user that the RFQ associated to the quotation has been updated succesfully. As the user if they want to review another quote by typing yes or no"
+    template="Respond to the user that the RFQ associated to the quotation has been updated succesfully. As the user if they want to review another quote"
 )
 
 quote_another_rfq_invalid_response__template = PromptTemplate(

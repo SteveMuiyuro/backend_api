@@ -1,6 +1,7 @@
 from bson import ObjectId
 import ast
 from datetime import datetime
+import re
 
 def updateBidStatus(quoteId, user_input, db):
     # Fetch the quotation by its ID
@@ -362,3 +363,63 @@ def get_best_quotes(quotations):
         "lowest_price": quotes_with_lowest_price,
         "earliest_delivery_date": quotes_with_earliest_delivery,
     }
+
+def extract_number(user_input):
+    # Use a regular expression to find the first number in the input string
+    match = re.search(r'\d+', user_input)
+    if match:
+        return int(match.group())
+    return None
+
+def extract_keywords(user_input):
+    # Define the keywords to match
+    keywords = ["Price", "Delivery", "Balanced"]
+
+    # Create a regular expression pattern to match any of the keywords
+    pattern = r'\b(?:' + '|'.join(keywords) + r')\b'
+
+    # Find all matches (case-insensitive)
+    matches = re.findall(pattern, user_input, re.IGNORECASE)
+
+    # Process matches
+    if not matches:
+        return None
+    elif len(matches) == 1:
+        return matches[0].capitalize()
+    else:
+        return [match.capitalize() for match in matches]
+
+
+def check_status(input_text):
+    # Define rejection-related and acceptance-related keywords
+    rejection_keywords = ["cancel", "rejected", "reject", "decline", "disapprove", "deny"]
+    acceptance_keywords = ["accept", "accepted", "approve", "approved", "confirm", "agree"]
+
+    # Compile regex patterns for both groups (case-insensitive)
+    rejection_pattern = r'\b(?:' + '|'.join(rejection_keywords) + r')\b'
+    acceptance_pattern = r'\b(?:' + '|'.join(acceptance_keywords) + r')\b'
+
+    # Check for matches in the input text
+    if re.search(rejection_pattern, input_text, re.IGNORECASE):
+        return "rejected"
+    elif re.search(acceptance_pattern, input_text, re.IGNORECASE):
+        return "accepted"
+    else:
+        return None
+
+def check_review_response(user_input):
+    # Define yes-like and no-like keywords
+    yes_keywords = ["yes", "another", "sure", "okay", "yep", "yup", "affirmative", "yeah", "alright"]
+    no_keywords = ["no", "not", "nope", "never", "nah", "negative", "none"]
+
+    # Compile regex patterns for both groups (case-insensitive)
+    yes_pattern = r'\b(?:' + '|'.join(yes_keywords) + r')\b'
+    no_pattern = r'\b(?:' + '|'.join(no_keywords) + r')\b'
+
+    # Check for matches in the input text
+    if re.search(yes_pattern, user_input, re.IGNORECASE):
+        return "yes"
+    elif re.search(no_pattern, user_input, re.IGNORECASE):
+        return "no"
+    else:
+        return None
