@@ -23,21 +23,21 @@ quote_another_rfq_template = PromptTemplate(
 )
 
 quote_recommendation_template = PromptTemplate(
-    template="Let the user know that based on selected criteria, you have found, state the number of results inside {recommendations} as the best quotes for the RFQ:{selected_rfq} just state the delivery date and the price per unit. E.g I have found 2 results with a unit price of x amount and a delivery date of x you dont have to list all details. Please dont include the quote ID or currency symbol on unit price. If the recommendations are multiple, just list the number of results and the {criteria_matched}. The criteria matched is {criteria_matched}. Simply ask the user if they Would like you to have the RFQ associated to this quote Accepted or rejected?"
+    template="Let the user know that based on selected criteria, you have found, state the number of results inside {recommendations} as the best quotes for the RFQ:{selected_rfq} just state the delivery date and the price per unit. E.g I have found 2 results with a unit price of x amount and a delivery date of x you dont have to list all details. Please dont include the quote ID or currency symbol on unit price. If the recommendations are multiple, just list the number of results and the {criteria_matched}. The criteria matched is {criteria_matched}. Simply ask the user if they Would like you to quote Accept or reject the quote?"
 )
 
 quote_recomendation_final_confirmation_invalid__template = PromptTemplate(
-    template="Respond to the user that the input is invalid and you didn't quite get that. Ask the user again Do you want me to have the bid associated to this quote Rejected or Accepted"
+    template="Respond to the user that the input is invalid and you didn't quite get that. Ask the user again Do you want me to have  this quote Rejected or Accepted"
 )
 
 
 quote_recomendation_final_confirmation_failed__template = PromptTemplate(
-    template="Respond to the user that RFQ status is already updated as {status}. ASk the user if they would want to review another RFQ"
+    template="Respond to the user that RFQ status is already updated as {status}. Ask the user if they would want to review another RFQ"
 )
 
 
 quote_recomendation_final_confirmation_success_template = PromptTemplate(
-    template="Respond to the user that the RFQ associated to the quotation has been updated succesfully. As the user if they want to review another quote"
+    template="Respond to the user that the bid associated to the quotation has been updated succesfully. As the user if they want to review another RFQ"
 )
 
 quote_another_rfq_invalid_response__template = PromptTemplate(
@@ -53,5 +53,5 @@ quote_error_fetching_rfq_list__template = PromptTemplate(
 )
 
 quote_session_reset_template = PromptTemplate(
-    template="Let the user know that there has been a session reset due to an unexpected state and that you will have to restart the process again. Request the user to reenter the RFQ ID"
+    template="Let the user know that there has been a session reset due to an unexpected state and that you will have to restart the process again. Request the user to re-enter the RFQ ID"
 )
