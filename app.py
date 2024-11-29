@@ -19,7 +19,7 @@ from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, g
 from helpers.create_request_helpers import generate_random_string,validate_input, detect_priority
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template,another_product_invalid_response_template
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
-from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template
+from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template,create_request_confirmation_invalid_template, create_request_another_confirmation_invalid_template,create_another_request_template, create_request_invalid_priority_template
 app = Flask(__name__, static_folder='static')
 CORS(app)
 load_dotenv()
@@ -108,12 +108,15 @@ def create_request():
         action = detect_priority(user_input)
         if action:
             session["priority"] = action
-        session["step"] = "items"
-        set_session_data(user_id, session)
-        response = conversation_chain.predict(
+            session["step"] = "items"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
             input=create_request_recored_items_template_template.format(input=session["priority"]))
 
-        return jsonify({"response": response})
+            return jsonify({"response": response})
+        else:
+            response = conversation_chain.predict(
+            input=create_request_invalid_priority_template.format(input=session["priority"]))
 
     elif current_step == "items":
         session["items"] = user_input
@@ -124,9 +127,10 @@ def create_request():
         return jsonify({"response": response})
 
     elif current_step == "confirmation":
-        if user_input.lower() in ["yes", "submit"]:
+        action = check_review_response(user_input)
+        pr_id = generate_random_string()
+        if action == "yes":
             # Save to database
-            pr_id = generate_random_string()
             request_data = {
                 "title": f"PR-{pr_id}-{session['items']}",
                 "dueDate": session["due_date"],
@@ -146,27 +150,41 @@ def create_request():
             response = conversation_chain.predict(
             input=create_request_another_template.format(input=pr_id))
             return jsonify({"response": response})
-        elif user_input.lower() in ["no", "cancel"]:
+        elif action == "no":
             delete_session_data(user_id)
+            session = {"step": "another_request"}
+            set_session_data(user_id, session)
             response = conversation_chain.predict(
             input=create_request_cancel_template.format(input=pr_id))
             return jsonify({"response": response})
+        else:
+            response = conversation_chain.predict(
+            input=create_request_confirmation_invalid_template.format())
+            return jsonify({"response": response})
+
 
     elif current_step == "another_request":
-        if user_input.lower() == "yes":
+        action = check_review_response(user_input)
+        if action == "yes":
             delete_session_data(user_id)
             session = {"step": "due_date"}
             set_session_data(user_id, session)
-            return jsonify({"response": "When is the due date for the request?"})
-        elif user_input.lower() == "no":
+            response = conversation_chain.predict(
+            input=create_another_request_template.format(user_name=user_name))
+            return jsonify({"response": response})
+        elif action == "no":
             delete_session_data(user_id)
             response= conversation_chain.predict(
                 input=exit_template.format()
             )
             return jsonify({"response": response, "exit": True})
+        else:
+            response = conversation_chain.predict(
+            input=create_request_another_confirmation_invalid_template.format())
+            return jsonify({"response": response})
+
     response=  response= conversation_chain.predict(
-                input=create_request_session_reset_template.format()
-            )
+    input=create_request_session_reset_template.format())
     delete_session_data(user_id)
     set_session_data(user_id, {"step":"due_date"})
     # Fallback for unrecognized input

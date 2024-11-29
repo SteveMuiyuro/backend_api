@@ -407,19 +407,22 @@ def check_status(input_text):
     else:
         return None
 
+
 def check_review_response(user_input):
-    # Define yes-like and no-like keywords
-    yes_keywords = ["yes", "another", "sure", "okay", "yep", "yup", "affirmative", "yeah", "alright"]
+
+    # Define yes-like and no-like keywords (case-insensitive)
+    yes_keywords = ["yes", "another", "sure", "okay", "yep", "yup", "affirmative", "yeah", "alright", "submit"]
     no_keywords = ["no", "not", "nope", "never", "nah", "negative", "none", "cancel"]
 
-    # Compile regex patterns for both groups (case-insensitive)
+    # Create regex patterns for keyword matching
     yes_pattern = r'\b(?:' + '|'.join(yes_keywords) + r')\b'
     no_pattern = r'\b(?:' + '|'.join(no_keywords) + r')\b'
 
-    # Check for matches in the input text
+    # Check for yes-like keywords in the input
     if re.search(yes_pattern, user_input, re.IGNORECASE):
         return "yes"
+    # Check for no-like keywords in the input
     elif re.search(no_pattern, user_input, re.IGNORECASE):
         return "no"
-    else:
-        return None
+    # Return None if no match is found
+    return None

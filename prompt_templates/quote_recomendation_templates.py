@@ -41,7 +41,7 @@ quote_recomendation_final_confirmation_success_template = PromptTemplate(
 )
 
 quote_another_rfq_invalid_response__template = PromptTemplate(
-    template="Let the user know that you didn't quote get that entry, further request the user to type yes to review another entry or no to exit the session"
+    template="Let the user know that you didn't quite get that entry, further request the user to type yes to review another entry or no to exit the session"
 )
 
 quote_criteria_not_valid__template = PromptTemplate(
