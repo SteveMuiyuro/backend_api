@@ -17,9 +17,12 @@ from helpers.product_prices_helpers import  detect_product_query, get_product_pr
 from helpers.get_product_prices_helpers import get_session_data, set_session_data, delete_session_data
 from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes, extract_number, extract_keywords, check_status, check_review_response
 from helpers.create_request_helpers import generate_random_string,validate_input, detect_priority
+from helpers.assign_request_workflow_helpers import find_Purchase_request_id, get_latest_pending_requests, get_distinct_workflows
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template,another_product_invalid_response_template
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
 from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template,create_request_confirmation_invalid_template, create_request_another_confirmation_invalid_template,create_another_request_template, create_request_invalid_priority_template
+from prompt_templates.assign_request_to_workflow_prompt_template import assign_workflow_greeting_template, assign_list_of_recent_requests_template, assign_unable_to_fetch_requests_template, assign_purchase_requests_selected_template, assign_purchase_requests_list_workflows_template
+
 app = Flask(__name__, static_folder='static')
 CORS(app)
 load_dotenv()
@@ -32,6 +35,13 @@ MONGO_URL = os.getenv("MONGO_URI")
 client = MongoClient(MONGO_URL)
 db = client.sourcify
 purchase_requests_collection = db.requests
+workflows = db.workflows
+# print(list(workflows.find({}).limit(1)))
+# organizations = db.organizations
+# print(list(organizations.find({}).limit(1)))
+unique_names = db.workflows.distinct("name")
+print(list(unique_names))
+# print(get_latest_pending_requests(db))
 
 
 # Initialize OpenAI's GPT-4 model
@@ -51,6 +61,116 @@ conversation_chain = ConversationChain(
 
 # ThreadPoolExecutor for concurrent API calls
 executor = ThreadPoolExecutor(max_workers=10)
+
+@app.route('/assign_workflow', methods=['POST'])
+def assign_workflow():
+    user_id = request.json.get('userId')
+    user_input = request.json.get('message')
+    user_name = request.json.get('userName')
+
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+
+    # Retrieve session data
+    session = get_session_data(user_id)
+
+    # Initialize session if not found
+    if not session:
+        session = {
+            "userId": user_id,
+            "userName": user_name,
+            "userInput": user_input,
+            "step": "pr_selection",
+            "greeting_sent": True
+        }
+        set_session_data(user_id, session)
+
+    # Handle "start" input to reset session
+    if user_input == "start":
+        session["step"] = "pr_selection"
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=assign_workflow_greeting_template.format(user_name=user_name)
+        )
+        return jsonify({"response": response})
+
+    # Check and update greeting status
+    if not session.get("greeting_sent"):
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=assign_workflow_greeting_template.format(user_name=user_name))
+        return jsonify({"response": response})
+
+    # Retrieve current step
+    step = session.get("step", "pr_selection")
+    print(f"User {user_id} is at step: {step}")
+
+    if step == "pr_selection":
+        selected_pr = find_Purchase_request_id(user_input, db)
+        if not selected_pr:
+            try:
+                recent_prs = get_latest_pending_requests(db)
+                session["purchase_requests"] = recent_prs
+                session["step"] = "pr_selection"
+                set_session_data(user_id, session)
+                response = conversation_chain.predict(
+                input=assign_list_of_recent_requests_template.format(input=user_input.strip()))
+
+                response = {
+                    "response": response,
+                    "recent_prs": recent_prs
+                }
+                return jsonify(response)
+            except Exception as e:
+                response = conversation_chain.predict(
+                input=assign_unable_to_fetch_requests_template.format(error=str(e)))
+                return jsonify({"response": response})
+
+        # If a valid PR is found, proceed to the next step
+        session["selected_pr"] = selected_pr
+        print(f"selected purchase request:{session['selected_pr']}")
+        session["step"] = "workflow_selection"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+                input=assign_purchase_requests_selected_template.format(input=session["selected_pr"]))
+        return jsonify({"response": response})
+
+    elif step == "workflow_selection":
+        available_workflows = get_distinct_workflows(db)
+        workflow_choice = user_input.strip()
+
+        if workflow_choice not in available_workflows:
+            session["step"] = "workflow_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_purchase_requests_list_workflows_template.format(input=workflow_choice))
+
+            response = {
+                "response": response,
+                "available_workflows": available_workflows
+            }
+            return jsonify(response)
+
+        # Assign the selected workflow to the purchase request
+        session["selected_workflow"] = workflow_choice
+        assign_workflow_to_pr(session["selected_pr"], workflow_choice, db)
+        session["step"] = "completed"
+        set_session_data(user_id, session)
+
+        response = f"Approval workflow '{workflow_choice}' has been successfully assigned to purchase request {session['selected_pr']}."
+        return jsonify({"response": response})
+
+    elif step == "completed":
+        response = "The assignment process is complete. If you need further assistance, type 'start' to begin a new session."
+        return jsonify({"response": response})
+
+    # Unhandled step
+    delete_session_data(user_id)
+    response = "Session reset due to an unexpected state. Please start again."
+    return jsonify({"response": response})
+
 
 @app.route('/create_request', methods=['POST'])
 def create_request():
@@ -137,7 +257,7 @@ def create_request():
                 "reason": session["reason"],
                 "priority": session["priority"],
                 "items": session["items"],
-                "status": "submitted",
+                "status": "pending",
                 "createdAt": datetime.now(timezone.utc),
                 "updatedAt": datetime.now(timezone.utc),
                 "requestId": f"PR-{pr_id}",
@@ -328,8 +448,6 @@ def recommend_best_quotes():
             input=quote_recommendation_template.format(recommendations=recommended_quote, criteria_matched=criteria_match, selected_rfq=session["selected_rfq"])
         )
         return jsonify({"response": response, "best_quotes": recommended_quote})
-
-
 
     elif step == "final_confirmation":
         action = check_status(user_input)

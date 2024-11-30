@@ -1,7 +1,6 @@
 from langchain.prompts import PromptTemplate
 #Define prompt Get Quote Recommendation templates for each conversation step
 quote_recomendation_greeting_template = PromptTemplate(
-    input_variables=["user_name"],
     template=" Start by greeting  {user_name}! introduce yourself as Sarm the user's assistant in finding the best quote for the user's RFQ. Ask the user if they have an RFQ ID, if they do,request  them provide it. If not, quote that you can can display recent RFQs for the user."
 )
 
