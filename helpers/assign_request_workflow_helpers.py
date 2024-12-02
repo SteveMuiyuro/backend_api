@@ -1,4 +1,5 @@
 
+from pymongo.errors import PyMongoError
 from pymongo import DESCENDING
 
 def find_Purchase_request_id(input_value, db):
@@ -44,3 +45,42 @@ def get_distinct_workflows(db):
     except Exception as e:
         print(f"An error occurred: {e}")
         return []
+
+def get_workflow_id(db, workflow_name):
+    # Query the workflows collection for the specified name
+    workflow = db.workflows.find_one({"name": workflow_name}, {"_id": 1})
+
+    # If the workflow is found, return the WorkflowID as a string
+    if workflow:
+        return str(workflow["_id"])
+
+    # If no workflow is found, return None
+    return None
+
+
+def update_request_with_Workflow_id(db, request_id, workflow_id):
+    try:
+        # Update the document with the matching requestId
+        result = db.requests.update_one(
+            {"requestId": request_id},  # Match the request by requestId
+            {"$set": {"workflow": workflow_id}}  # Set or create the workflow field
+        )
+
+        # Check if the update matched and modified a document
+        if result.matched_count > 0:
+            if result.modified_count > 0:
+                return "success"  # Field was updated
+            return "success"  # Field was already set to the desired value
+        else:
+            return None  # No document matched the criteria
+
+    except PyMongoError as e:
+
+        # Handle database-specific errors
+        print(f"Database error: {e}")
+        return e
+    except Exception as e:
+
+        # Handle general exceptions
+        print(f"Unexpected error: {e}")
+        return e

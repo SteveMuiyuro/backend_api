@@ -17,5 +17,30 @@ assign_purchase_requests_selected_template = PromptTemplate(
 )
 
 assign_purchase_requests_list_workflows_template = PromptTemplate(
-    template="Analyze the {input} and based on the content, you can quote that the user should select a valid approval workflows from the list available below. Keep it atmost two sentences"
+    template="Analyze the {input} and based on the content, you can quote that the user should select a valid approval workflows from the list available below for {PRID}. Keep it atmost two sentences"
+)
+
+assign_purchase_request_assigned_template = PromptTemplate(
+    template="Respond that the {requestID} has been  succesfully assigned to {workflow} workflow. Ask the user if they want o assign another request to a workflow by typing yes or no"
+)
+
+assign_purchase_request_assigned_error__template = PromptTemplate(
+    template="Respond that the  assignment of {requestID} to {workflow} workflow was unsuccesfull. No document matched the request. Ask the user to retry by entering the request ID to restrat the process"
+)
+
+assign_purchase_request_error__template = PromptTemplate(
+    template="Respond that the  assignment of {requestID} to {workflow} workflow was unsuccesfull Due to {error}. Ask the user to retry by entering the request ID to restart the process"
+)
+
+assign_another_request_assignment_template =  PromptTemplate(
+    template="You can start your sentence with Awesome {user_name}, cool {user_name} or any other word that shows excitement to proceed, proceed and request the user  to enter a new Request ID"
+)
+
+assign_another_assignment_invalid_template = PromptTemplate(
+    template="Analyze the {input} and let the user know that they need to type a yes to proceed with the assignmnet of another request or no to exit the session"
+)
+
+
+assign_request_fallback_template = PromptTemplate(
+    template="Apologize and quote that you will have to restart the process due to unexpected state"
 )
