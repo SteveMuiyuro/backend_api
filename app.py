@@ -15,13 +15,15 @@ from flask_cors import CORS
 from pymongo import MongoClient
 from helpers.product_prices_helpers import  detect_product_query, get_product_price_data, query_general
 from helpers.get_product_prices_helpers import get_session_data, set_session_data, delete_session_data
-from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes, extract_number, extract_keywords, check_status, check_review_response
+from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, getBids, getQuotationDetails, getQuotationsForBids, listAllRFQs, updateBidStatus,get_best_quotes, extract_number, extract_keywords, check_status, check_review_response,getPurchaseRequestTitle
 from helpers.create_request_helpers import generate_random_string,validate_input, detect_priority
 from helpers.assign_request_workflow_helpers import find_Purchase_request_id, get_latest_pending_requests, get_distinct_workflows, get_workflow_id, update_request_with_Workflow_id
+from helpers.check_progress_helpers import get_request_details
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template,another_product_invalid_response_template
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
 from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template,create_request_confirmation_invalid_template, create_request_another_confirmation_invalid_template,create_another_request_template, create_request_invalid_priority_template
 from prompt_templates.assign_request_to_workflow_prompt_template import assign_workflow_greeting_template, assign_list_of_recent_requests_template, assign_unable_to_fetch_requests_template, assign_purchase_requests_selected_template, assign_purchase_requests_list_workflows_template, assign_purchase_request_assigned_template,assign_purchase_request_assigned_error__template, assign_purchase_request_error__template,assign_another_request_assignment_template, assign_another_assignment_invalid_template, assign_request_fallback_template
+from prompt_templates.check_progress_prompt_templates import check_request_progress_greeting_template, check_request_list_of_recent_requests_template, check_request_selected_template
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -37,6 +39,9 @@ db = client.sourcify
 purchase_requests_collection = db.requests
 workflows = db.workflows
 departments = db.departments
+actions = db.actions
+# print(list(actions.find({})))
+# print(list(purchase_requests_collection.find({}).limit(2)))
 
 
 # Initialize OpenAI's GPT-4 model
@@ -56,6 +61,182 @@ conversation_chain = ConversationChain(
 
 # ThreadPoolExecutor for concurrent API calls
 executor = ThreadPoolExecutor(max_workers=10)
+
+@app.route('/check_progress', methods=['POST'])
+def check_progress():
+    user_id = request.json.get('userId')
+    user_input = request.json.get('message')
+    user_name = request.json.get('userName')
+
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+
+    # Retrieve session data
+    session = get_session_data(user_id)
+
+    # Initialize session if not found
+    if not session:
+        session = {
+            "userId": user_id,
+            "userName": user_name,
+            "userInput": user_input,
+            "step": "select_pr",
+            "greeting_sent": True
+        }
+        set_session_data(user_id, session)
+
+    # Handle "start" input to reset session
+    if user_input == "start":
+        session["step"] = "select_pr"
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=check_request_progress_greeting_template.format(user_name=user_name)
+        )
+        return jsonify({"response": response})
+
+    # Check and update greeting status
+    if not session.get("greeting_sent"):
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=check_request_progress_greeting_template.format(user_name=user_name))
+        return jsonify({"response": response})
+
+    # Retrieve current step
+    step = session.get("step", "select_pr")
+    print(f"User {user_id} is at step: {step}")
+
+    if step == "select_pr":
+        selected_pr = find_Purchase_request_id(user_input, db)
+        if not selected_pr:
+            try:
+                recent_prs = get_latest_pending_requests(db)
+                session["purchase_requests"] = recent_prs
+                session["step"] = "select_pr"
+                set_session_data(user_id, session)
+                response = conversation_chain.predict(
+                input=check_request_list_of_recent_requests_template.format(input=user_input.strip()))
+
+                response = {
+                    "response": response,
+                    "recent_prs": recent_prs
+                }
+                return jsonify(response)
+            except Exception as e:
+                response = conversation_chain.predict(
+                input=assign_unable_to_fetch_requests_template.format(error=str(e)))
+                return jsonify({"response": response})
+
+        # If a valid PR is found, proceed to the next step
+        session["selected_pr"] = selected_pr
+        session["request_title"] = getPurchaseRequestTitle(session["selected_pr"], db)
+        session["step"] = "confirm_selection"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+                input=check_request_selected_template.format(input=session["selected_pr"]), title=session["request_title"])
+        return jsonify({"response": response})
+
+    elif step == "confirm_selection":
+        action = check_review_response(user_input)
+
+
+        if action == "yes":
+            session["request_details"] = get_request_details(session["selected_pr"], db)
+
+
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_another_request_assignment_template.format(user_name=user_name)
+            )
+            return jsonify({"response": response})
+
+        elif action == "no":
+            delete_session_data(user_id)
+            response = conversation_chain.predict(input=exit_template.format())
+            return jsonify({"response": response, "exit": True})
+
+        else:
+            session["step"] = "another_assignment"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_another_assignment_invalid_template.format(input=user_input)
+            )
+            return jsonify({"response": response})
+
+
+
+
+
+        available_workflows = get_distinct_workflows(db)
+        workflow_choice = user_input.strip()
+
+        if workflow_choice not in available_workflows:
+            session["step"] = "workflow_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_purchase_requests_list_workflows_template.format(input=workflow_choice, PRID=session["selected_pr"]))
+
+            response = {
+                "response": response,
+                "available_workflows": available_workflows
+            }
+            return jsonify(response)
+
+        # Assign the selected workflow to the purchase request
+        session["selected_workflow"] = workflow_choice
+        session["workflow_id"] = get_workflow_id(db, session["selected_workflow"])
+        print(session["workflow_id"])
+        session["request_updated"] = update_request_with_Workflow_id(db,session["selected_pr"], session["workflow_id"])
+        if session["request_updated"] == "success":
+            session["step"] = "another_assignment"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_purchase_request_assigned_template.format(requestID=session["selected_pr"], workflow=session["selected_workflow"]))
+            return jsonify({"response": response})
+        elif session["request_updated"] == None:
+            session["step"] = "pr_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_purchase_request_assigned_error__template.format(requestID=session["selected_pr"], workflow=session["selected_workflow"]))
+            return jsonify({"response": response})
+        else:
+            session["step"] = "pr_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+            input=assign_purchase_request_error__template.format(requestID=session["selected_pr"], workflow=session["selected_workflow"], error=session["request_updated"]))
+            return jsonify({"response": response})
+
+    elif step == "another_assignment":
+        action = check_review_response(user_input)
+
+        if action == "yes":
+            session["step"] = "pr_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_another_request_assignment_template.format(user_name=user_name)
+            )
+            return jsonify({"response": response})
+
+        elif action == "no":
+            delete_session_data(user_id)
+            response = conversation_chain.predict(input=exit_template.format())
+            return jsonify({"response": response, "exit": True})
+
+        else:
+            session["step"] = "another_assignment"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_another_assignment_invalid_template.format(input=user_input)
+            )
+            return jsonify({"response": response})
+
+
+    # Fallback for unrecognized input
+    response = conversation_chain.predict(input=assign_request_fallback_template.format())
+    delete_session_data(user_id)
+    set_session_data(user_id, {"step": "pr_selection"})
+    return jsonify({"response": response})
 
 @app.route('/assign_workflow', methods=['POST'])
 def assign_workflow():
@@ -125,7 +306,6 @@ def assign_workflow():
 
         # If a valid PR is found, proceed to the next step
         session["selected_pr"] = selected_pr
-        print(f"selected purchase request:{session['selected_pr']}")
         session["step"] = "workflow_selection"
         set_session_data(user_id, session)
         response = conversation_chain.predict(
@@ -250,11 +430,12 @@ def create_request():
     elif current_step == "reason":
         session["reason"] = user_input
         session["step"] = "priority"
+        session["priorities"] = ['Urgent', 'High', 'Medium', 'Low']
         set_session_data(user_id, session)
         response = conversation_chain.predict(
             input=create_request_priority_template_template.format(input=session["reason"]))
 
-        return jsonify({"response": response})
+        return jsonify({"response": response, "priorities":session["priorities"]})
 
     elif current_step == "priority":
         action = detect_priority(user_input)
@@ -263,7 +444,7 @@ def create_request():
             session["step"] = "items"
             set_session_data(user_id, session)
             response = conversation_chain.predict(
-            input=create_request_recored_items_template_template.format(input=session["priority"]))
+            input=create_request_recored_items_template_template.format(input=session["priority"],reason=session["reason"]))
 
             return jsonify({"response": response})
         else:

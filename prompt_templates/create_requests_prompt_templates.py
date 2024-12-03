@@ -1,19 +1,19 @@
 from langchain.prompts import PromptTemplate
 
 create_request_greetings_template_template = PromptTemplate(
-    template="start by greeting the user {user_name} introduce yourself as Sarm and let the user know that you are their assistant in creating a purchase request. Proceed and ask for the request's due date"
+    template="start by greeting the user {user_name} introduce yourself as Sarm and let the user know that you are their assistant in creating a purchase request. Proceed and ask for the request's due date in the format YYYY-MM-DD and ensure the user inputs today's date or later date"
 )
 
 create_request_reason_template_template = PromptTemplate(
-    template="Respond that the due date:{input} has been noted. Request the user to provide the reason for the purchase"
+    template="Respond that the due date:{input} has been noted. Request the user to provide the reason for the purchase in the format 10 broken tables or 12 faulty laptops"
 )
 
 create_request_priority_template_template = PromptTemplate(
-    template="Respond that that the reason:{input} has been noted. Request the user to provide the priority for the purchase based on the following options (Urgent, High, Medium, Low)"
+    template="Respond that that the reason:{input} has been noted. simply request the user to provide the priority for the purchase based on the options below: Don't mention the options"
 )
 
 create_request_recored_items_template_template = PromptTemplate(
-    template="Respond that the priority: {input} has been noted. Ask the user what items they are looking to purchase")
+    template="Respond that the priority: {input} has been noted. Based on the reason provided:{reason}, Ask the user what items they are looking to purchase in the format 10 Laptops or 10 Chairs")
 
 
 create_request_invalid_date_template_template = PromptTemplate(

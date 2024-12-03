@@ -14,7 +14,7 @@ quote_recomendation_criteria_template = PromptTemplate(
 )
 
 quote_recommendation_false_template = PromptTemplate(
-    template="Let the user know that the selected RFQ number {selected_rfq} does not have any quotations yet, Ask the user if they would like to review a different RFQ request them to type Yes  or No"
+    template="Let the user know that the selected RFQ number {selected_rfq} does not have any quotations yet, Ask the user if they would like to review a different RFQ request them to type Yes or No"
 )
 
 quote_another_rfq_template = PromptTemplate(
