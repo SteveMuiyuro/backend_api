@@ -31,3 +31,9 @@ another_product_template = PromptTemplate(
 another_product_invalid_response_template = PromptTemplate(
     template="Let the user know that you didn't quite get that, Request the user to type yes to proceed or no to cancel the session and exit"
 )
+
+
+#
+error_template = PromptTemplate(
+    template="Let the user know that there's been an {error} in fetching data"
+)

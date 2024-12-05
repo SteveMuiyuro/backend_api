@@ -30,10 +30,10 @@ expected_schema = {
                     "location": {"type": "string"},
                     "supplier_contact": {"type": "string"},
                     "email": {"type": "string"},
-                    "website": {"type": "string"},
+                    "product_url": {"type": "string"},
                     "product_image_url": {"type": "string"},
                 },
-                "required": ["supplier", "product_name", "price", "location", "email"]
+                "required": ["supplier", "product_name", "price", "location", "product_url","email"]
             }
         }
     },
@@ -51,28 +51,35 @@ def query_openai(prompt):
         "Content-Type": "application/json"
     }
     schema_description = """
-    Provide a JSON response with the following structure:
-    {
-        "suppliers": [
-            {
-                "supplier": "string",
-                "product_name": "string",
-                "price": "string",
-                "location": "string",
-                "supplier_contact": "string",
-                "email": "string",
-                "website": "string",
-                "product_image_url": "string"
-            }
-        ]
-    }
-    """
+Please provide a JSON response with the following structure:
+{
+    "suppliers": [
+        {
+            "supplier": "string",  # Supplier name
+            "product_name": "string",  # Name of the product
+            "price": "string",  # Current market price in the local currency
+            "location": "string",  # Location of the supplier
+            "supplier_contact": "string",  # Supplier's contact name
+            "email": "string",  # Supplier's valid email address
+            "product_url": "string",  # Product's official URL (clickable)
+            "product_image_url": "string"  # URL for the product image
+        }
+    ]
+}
+
+Please ensure that:
+1. Only top-rated suppliers with high ratings (if available) are included in the response.
+2. Prices are reflective of the current market rates.
+3. The product URL and email addresses must be active, valid, and functional.
+4. The response contains only valid JSON according to the structure above.
+"""
+
     payload = {
         "model": "gpt-4-turbo",
         "messages": [
             {"role": "system", "content": f" your are a product information speacilist. Generate a response using the following schema: {schema_description}. "
                 "Ensure your response only contains JSON matching this structure."},
-            {"role": "user", "content": f"{prompt} prioritize results with actual price, supplier's name, product name, and location, a legitimate and official website and email as mandatory fields; return at least six to eight results always priotise those results with price information"}
+            {"role": "user", "content": f"{prompt}"}
         ],
         "temperature": 0
     }
@@ -96,6 +103,7 @@ def get_product_price_data(prompt, limit):
     try:
         future = executor.submit(query_openai, f"{prompt} return {limit} results")
         response_dict = future.result()
+        print(response_dict)
         # Extract the 'choices' field from the Perplexity response
         choices = response_dict.get("choices", [])
         if not choices:
@@ -143,7 +151,7 @@ def get_product_price_data(prompt, limit):
                         "location": item.get("location", "Unknown Location"),
                         "supplier_contact": item.get("supplier_contact", "Not Available"),
                         "email": item.get("email", "Not Available"),
-                        "website": item.get("website", "Not Available"),
+                        "product_url": item.get("product_url", "Not Available"),
                         "product_image_url": product_image_url
                     })
                 # Return the response with the introductory message
