@@ -24,7 +24,7 @@ from prompt_templates.get_product_price_prompt_templates import greeting_templat
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
 from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template,create_request_confirmation_invalid_template, create_request_another_confirmation_invalid_template,create_another_request_template, create_request_invalid_priority_template
 from prompt_templates.assign_request_to_workflow_prompt_template import assign_workflow_greeting_template, assign_list_of_recent_requests_template, assign_unable_to_fetch_requests_template, assign_purchase_requests_selected_template, assign_purchase_requests_list_workflows_template, assign_purchase_request_assigned_template,assign_purchase_request_assigned_error__template, assign_purchase_request_error__template,assign_another_request_assignment_template, assign_another_assignment_invalid_template, assign_request_fallback_template
-from prompt_templates.check_progress_prompt_templates import check_request_progress_greeting_template, check_request_list_of_recent_requests_template, check_request_selected_template, check_request_selected_pr_template, check_another_check_template, check_another_check_invalid_template
+from prompt_templates.check_progress_prompt_templates import check_request_progress_greeting_template, check_request_list_of_recent_requests_template, check_request_selected_template, check_request_selected_pr_template, check_another_check_template, check_another_check_invalid_template, check_request_alternative_requests_template
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -154,11 +154,12 @@ def check_progress():
                     "response": response,
                     "selected_PR": session["request_details"]
                 }
+            return jsonify(response)
 
         elif action == "no":
-            set_session_data(user_id, session)
             session["step"] = "select_pr"
-            response = conversation_chain.predict(input=check_request_list_of_recent_requests_template.format(input=user_input))
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(input=check_request_alternative_requests_template.format(input=user_input))
             return jsonify({"response": response})
         else:
             session["step"] = "confirm_selection"
