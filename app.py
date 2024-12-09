@@ -20,11 +20,14 @@ from helpers.recommend_qoutes_helpers import evaluate_quotes, find_request_id, g
 from helpers.create_request_helpers import generate_random_string,validate_input, detect_priority
 from helpers.assign_request_workflow_helpers import find_Purchase_request_id, get_latest_pending_requests, get_distinct_workflows, get_workflow_id, update_request_with_Workflow_id
 from helpers.check_progress_helpers import get_request_details
+from helpers.create_rfq_helpers import serialize_object_id
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template,another_product_invalid_response_template, error_template
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
 from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template,create_request_confirmation_invalid_template, create_request_another_confirmation_invalid_template,create_another_request_template, create_request_invalid_priority_template
 from prompt_templates.assign_request_to_workflow_prompt_template import assign_workflow_greeting_template, assign_list_of_recent_requests_template, assign_unable_to_fetch_requests_template, assign_purchase_requests_selected_template, assign_purchase_requests_list_workflows_template, assign_purchase_request_assigned_template,assign_purchase_request_assigned_error__template, assign_purchase_request_error__template,assign_another_request_assignment_template, assign_another_assignment_invalid_template, assign_request_fallback_template
 from prompt_templates.check_progress_prompt_templates import check_request_progress_greeting_template, check_request_list_of_recent_requests_template, check_request_selected_template, check_request_selected_pr_template, check_another_check_template, check_another_check_invalid_template, check_request_alternative_requests_template
+
+from prompt_templates.create_rfq_prompt_template import create_rfq_greetings_template_template, create_rfq_list_of_recent_requests_template, create_rfq_due_date_template, create_rfq_description_template, create_rfq_confirmation_template,create_rfq_another_template,create_another_rfq_template,create_rfq_revise_details_template
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -41,11 +44,13 @@ purchase_requests_collection = db.requests
 workflows = db.workflows
 departments = db.departments
 actions = db.actions
+requestfors = db.requestfors
+
 
 # print(list(departments.find({}).limit(2)))
 # print(list(actions.find({})))
-# print(list(purchase_requests_collection.find({}).limit(2)))
-
+# print(list(purchase_requests_collection.find({}).limit(1)))
+print(list(requestfors.find({}).limit(2)))
 
 # Initialize OpenAI's GPT-4 model
 llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
@@ -64,6 +69,176 @@ conversation_chain = ConversationChain(
 
 # ThreadPoolExecutor for concurrent API calls
 executor = ThreadPoolExecutor(max_workers=10)
+
+
+@app.route('/create_rfq', methods=['POST'])
+def create_rfq():
+    user_id = request.json.get('userId')
+    user_input = request.json.get('message')
+    user_name = request.json.get('userName')
+
+    if not user_id:
+        return jsonify({"error": "User ID is required"}), 400
+
+    # Retrieve session data
+    session = get_session_data(user_id)
+
+    # Initialize session if not found
+    if not session:
+        session = {
+            "userId": user_id,
+            "userName": user_name,
+            "userInput": user_input,
+            "step": "pr_selection",
+            "greeting_sent": True
+        }
+        set_session_data(user_id, session)
+
+    # Handle "start" input to reset session
+    if user_input == "start":
+        session["step"] = "pr_selection"
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_rfq_greetings_template_template.format(user_name=user_name)
+        )
+        return jsonify({"response": response})
+
+    # Check and update greeting status
+    if not session.get("greeting_sent"):
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_rfq_greetings_template_template.format(user_name=user_name))
+        return jsonify({"response": response})
+
+    # Retrieve current step
+    step = session.get("step", "pr_selection")
+    print(f"User {user_id} is at step: {step}")
+
+    if step == "pr_selection":
+        selected_pr = find_Purchase_request_id(user_input, db)
+        if not selected_pr:
+            try:
+                recent_prs = get_latest_pending_requests(db)
+                session["purchase_requests"] = recent_prs
+                session["step"] = "pr_selection"
+                set_session_data(user_id, session)
+                response = conversation_chain.predict(
+                input=create_rfq_list_of_recent_requests_template.format(input=user_input.strip()))
+
+                response = {
+                    "response": response,
+                    "recent_prs": recent_prs
+                }
+                return jsonify(response)
+            except Exception as e:
+                response = conversation_chain.predict(
+                input=assign_unable_to_fetch_requests_template.format(error=str(e)))
+                return jsonify({"response": response})
+
+        # If a valid PR is found, proceed to the next step
+        session["selected_pr"] = selected_pr
+        session["step"] = "due_date"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+                input=create_rfq_due_date_template.format(input=user_input.strip()))
+        return jsonify({"response": response})
+    # Validate user input
+    is_valid, error_msg = validate_input(step, user_input, create_request_invalid_date_template_template,create_request_invalid_format_date_template_template,create_request_invalid_priority_template_template,conversation_chain)
+    if not is_valid:
+        return jsonify({"response": error_msg})
+
+    elif step == "due_date":
+        session["due_date"] = user_input
+        session["step"] = "description"
+        session["title"] = getPurchaseRequestTitle(session["selected_pr"], db)
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_rfq_description_template.format(input=session["due_date"])
+        )
+        return jsonify({"response": response})
+    elif step == "description":
+        session["description"] = user_input
+        print(session["title"])
+        now = datetime.now(timezone.utc).isoformat()  # Convert datetime to ISO format
+        session["rfq_data"] = {
+            "items": session["title"],
+            "dueDate": session["due_date"],  # Assuming session["due_date"] is a string in the correct format
+            "description": session["description"],
+            "type": "request_for_quotation",
+            "status": "pending",
+            "createdAt": now,
+            "updatedAt": now,
+            "requestId": str(session["selected_pr"]),  # Convert ObjectId to string
+            "userId": str(user_id)                    # Convert ObjectId to string
+        }
+        session["step"] = "confirmation"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_rfq_confirmation_template.format(input=session["description"])
+        )
+        return jsonify({"response": response, "rfq_details": serialize_object_id(session["rfq_data"])})
+
+    elif step == "confirmation":
+        action = check_review_response(user_input)
+        if action == "yes":
+                        # Serialize the data
+                serialized_data = serialize_object_id(session["rfq_data"])
+
+                db.requestfors.insert_one(serialized_data)  # This will now be JSON-compatible
+                delete_session_data(user_id)
+                session["step"] = "another_rfq"
+                set_session_data(user_id, session)
+                response = conversation_chain.predict(
+                    input=create_rfq_another_template.format(input=user_input))
+                return jsonify({
+                    "response": response
+                })
+        elif action == "no":
+            session["step"] = "due_date"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(input=create_rfq_revise_details_template.format(input=user_input))
+            return jsonify({"response": response})
+
+        else:
+            session["step"] = "confirmation"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=check_another_check_invalid_template.format(input=user_input)
+            )
+            return jsonify({"response": response})
+
+    elif step == "another_rfq":
+        action = check_review_response(user_input)
+
+        if action == "yes":
+            session["step"] = "pr_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=create_another_rfq_template.format(user_name=user_name)
+            )
+            return jsonify({"response": response})
+
+        elif action == "no":
+            delete_session_data(user_id)
+            response = conversation_chain.predict(input=exit_template.format())
+            return jsonify({"response": response, "exit": True})
+
+        else:
+            session["step"] = "another_assignment"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=assign_another_assignment_invalid_template.format(input=user_input)
+            )
+            return jsonify({"response": response})
+
+    # Fallback for unrecognized input
+    response = conversation_chain.predict(input=assign_request_fallback_template.format())
+    delete_session_data(user_id)
+    set_session_data(user_id, {"step": "pr_selection"})
+    return jsonify({"response": response})
+
 
 @app.route('/check_progress', methods=['POST'])
 def check_progress():
@@ -338,7 +513,6 @@ def assign_workflow():
                 input=assign_another_assignment_invalid_template.format(input=user_input)
             )
             return jsonify({"response": response})
-
 
     # Fallback for unrecognized input
     response = conversation_chain.predict(input=assign_request_fallback_template.format())

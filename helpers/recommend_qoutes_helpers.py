@@ -284,7 +284,7 @@ def getPurchaseID(requestForID, db):
 
 def getPurchaseRequestTitle(purcharseRequestID, db):
     request_collection = db.requests
-    result = request_collection.find_one({"_id":ObjectId(purcharseRequestID)}, {"title":1, "_id":0})
+    result = request_collection.find_one({"requestId":purcharseRequestID}, {"title":1, "_id":0})
     if result:
         title = str(result["title"])
         return title

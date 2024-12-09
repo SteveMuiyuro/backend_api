@@ -5,7 +5,7 @@ assign_workflow_greeting_template = PromptTemplate(
 )
 
 assign_list_of_recent_requests_template = PromptTemplate(
-    template="Analyze the {input} and based on the content, you can quote that the can select from a list recent purchase requests awaiting assinment to a workflow. Don't display the list here. request the user to kindly select input the ID of the purchase request you want to assign."
+    template="Analyze the {input} and based on the content, you can quote that the can select from a list recent purchase requests awaiting assignment to a workflow. Don't display the list here. request the user to kindly select input the ID of the purchase request you want to assign."
 )
 
 assign_unable_to_fetch_requests_template = PromptTemplate(
