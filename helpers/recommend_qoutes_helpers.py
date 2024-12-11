@@ -284,7 +284,8 @@ def getPurchaseID(requestForID, db):
 
 def getPurchaseRequestTitle(purcharseRequestID, db):
     request_collection = db.requests
-    result = request_collection.find_one({"requestId":purcharseRequestID}, {"title":1, "_id":0})
+    result = request_collection.find_one({"_id":ObjectId(purcharseRequestID)}, {"title":1, "_id":0})
+
     if result:
         title = str(result["title"])
         return title
@@ -305,13 +306,16 @@ def listAllRFQs(db):
         purchase_data = getPurchaseID(purchase_request, db)
         request_id = purchase_data["requestId"]
         purchase_request_id = purchase_data["purchaseRequest"]
+        print(f"Here it is:{type(purchase_request_id)}:{purchase_request_id} :  {type(request_id)}:{request_id}")
+
 
         # Get the title for the purchase request
         title = getPurchaseRequestTitle(purchase_request_id, db)
+        print(title)
+
 
         # Append to final list
         final.append({"ID": request_id, "Title": title})
-    print(final)
 
 
     return final

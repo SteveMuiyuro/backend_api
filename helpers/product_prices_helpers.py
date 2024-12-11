@@ -12,8 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 # Access the API keys
 EBAY_ID = os.getenv("EBAY_ACCESS_KEY")
 OPENAI_API_URL ="https://api.openai.com/v1/chat/completions"
+PERPLEXITY_CHAT_ENDPOINT = "https://api.perplexity.ai/chat/completions"
 MONGO_URI = os.getenv("MONGO_URI")
 OPEN_AI_KEY = os.getenv("OPENAI_API_KEY")
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
 
 
 expected_schema = {
@@ -33,7 +35,7 @@ expected_schema = {
                     "product_url": {"type": "string"},
                     "product_image_url": {"type": "string"},
                 },
-                "required": ["supplier", "product_name", "price", "location", "product_url","email"]
+                "required": ["supplier", "product_name", "price", "location", "product_url","email", "supplier_contact"]
             }
         }
     },
@@ -45,9 +47,9 @@ expected_schema = {
 # ThreadPoolExecutor for concurrent API calls
 executor = ThreadPoolExecutor(max_workers=10)
 
-def query_openai(prompt):
+def query_perplexity(prompt):
     headers = {
-        "Authorization": f"Bearer {OPEN_AI_KEY}",
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
         "Content-Type": "application/json"
     }
     schema_description = """
@@ -59,7 +61,7 @@ Please provide a JSON response with the following structure:
             "product_name": "string",  # Name of the product
             "price": "string",  # Current market price in the local currency
             "location": "string",  # Location of the supplier
-            "supplier_contact": "string",  # Supplier's contact name
+            "supplier_contact": "string",  # Supplier's phone number
             "email": "string",  # Supplier's valid email address
             "product_url": "string",  # Product's official URL (clickable)
             "product_image_url": "string"  # URL for the product image
@@ -70,12 +72,14 @@ Please provide a JSON response with the following structure:
 Please ensure that:
 1. Only top-rated suppliers with high ratings (if available) are included in the response.
 2. Prices are reflective of the current market rates.
-3. The product URL and email addresses must be active, valid, and functional.
-4. The response contains only valid JSON according to the structure above.
+3. The response include the supplier's contact cell or phone number
+4. The response should also include an email address
+5. The product URL and email addresses must be active, valid, and functional.
+6. The response contains only valid JSON according to the structure above.
 """
 
     payload = {
-        "model": "gpt-4-turbo",
+        "model": "llama-3.1-sonar-large-128k-online",
         "messages": [
             {"role": "system", "content": f" your are a product information speacilist. Generate a response using the following schema: {schema_description}. "
                 "Ensure your response only contains JSON matching this structure."},
@@ -83,7 +87,7 @@ Please ensure that:
         ],
         "temperature": 0
     }
-    response = requests.post(OPENAI_API_URL, headers=headers, json=payload, timeout=100)
+    response = requests.post(PERPLEXITY_CHAT_ENDPOINT, headers=headers, json=payload, timeout=100)
     response.raise_for_status()
     return response.json()
 
@@ -101,7 +105,7 @@ def extract_json_from_response(content):
 
 def get_product_price_data(prompt, limit):
     try:
-        future = executor.submit(query_openai, f"{prompt} return {limit} results")
+        future = executor.submit(query_perplexity, f"{prompt} return {limit} results")
         response_dict = future.result()
         print(response_dict)
         # Extract the 'choices' field from the Perplexity response
@@ -111,7 +115,7 @@ def get_product_price_data(prompt, limit):
             # Extract the JSON content from the Perplexity response
         content = choices[0].get("message", {}).get("content", "")
             # json_data = extract_json_from_response(content)
-        json_data = json.loads(content)
+        json_data = extract_json_from_response(content)
         if not json_data:
                 print("there is an error 1")
                 return jsonify({"error": "Sorry, I cannot find sufficient data to respond to your request."}), 500
@@ -155,10 +159,11 @@ def get_product_price_data(prompt, limit):
                         "product_image_url": product_image_url
                     })
                 # Return the response with the introductory message
+        print(f"here is the json:{structured_response}")
         return jsonify({
                     "message": intro_message,
                     "suppliers": structured_response
-                })
+                }), 200
     except ValidationError as e:
         # Handle JSON schema validation errors
         return jsonify({"error": "Data validation failed", "details": str(e)}), 400

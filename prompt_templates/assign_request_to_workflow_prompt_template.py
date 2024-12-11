@@ -40,7 +40,6 @@ assign_another_assignment_invalid_template = PromptTemplate(
     template="Analyze the {input} and let the user know that they need to type a yes to proceed with the assignmnet of another request or no to exit the session"
 )
 
-
 assign_request_fallback_template = PromptTemplate(
     template="Apologize and quote that you will have to restart the process due to unexpected state"
 )

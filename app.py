@@ -21,13 +21,15 @@ from helpers.create_request_helpers import generate_random_string,validate_input
 from helpers.assign_request_workflow_helpers import find_Purchase_request_id, get_latest_pending_requests, get_distinct_workflows, get_workflow_id, update_request_with_Workflow_id
 from helpers.check_progress_helpers import get_request_details
 from helpers.create_rfq_helpers import serialize_object_id
+from helpers.create_po_helpers import find_quote_by_id
 from prompt_templates.get_product_price_prompt_templates import greeting_template, location_template,exit_template,another_product_template,option_template, final_prompt_template,another_product_invalid_response_template, error_template
 from prompt_templates.quote_recomendation_templates import quote_recomendation_greeting_template, quote_recomendation_criteria_template,quote_recomendation_list_rfq_template,quote_recommendation_template, quote_recommendation_false_template,quote_another_rfq_template,quote_recomendation_final_confirmation_failed__template,quote_recomendation_final_confirmation_invalid__template,quote_recomendation_final_confirmation_success_template,quote_another_rfq_invalid_response__template,quote_criteria_not_valid__template, quote_error_fetching_rfq_list__template,quote_session_reset_template
 from prompt_templates.create_requests_prompt_templates import create_request_greetings_template_template,create_request_priority_template_template,create_request_reason_template_template,create_request_recored_items_template_template,create_request_summary_template, create_request_another_template, create_request_cancel_template, create_request_session_reset_template,create_request_invalid_date_template_template, create_request_invalid_format_date_template_template, create_request_invalid_priority_template_template,create_request_confirmation_invalid_template, create_request_another_confirmation_invalid_template,create_another_request_template, create_request_invalid_priority_template
 from prompt_templates.assign_request_to_workflow_prompt_template import assign_workflow_greeting_template, assign_list_of_recent_requests_template, assign_unable_to_fetch_requests_template, assign_purchase_requests_selected_template, assign_purchase_requests_list_workflows_template, assign_purchase_request_assigned_template,assign_purchase_request_assigned_error__template, assign_purchase_request_error__template,assign_another_request_assignment_template, assign_another_assignment_invalid_template, assign_request_fallback_template
 from prompt_templates.check_progress_prompt_templates import check_request_progress_greeting_template, check_request_list_of_recent_requests_template, check_request_selected_template, check_request_selected_pr_template, check_another_check_template, check_another_check_invalid_template, check_request_alternative_requests_template
-
 from prompt_templates.create_rfq_prompt_template import create_rfq_greetings_template_template, create_rfq_list_of_recent_requests_template, create_rfq_due_date_template, create_rfq_description_template, create_rfq_confirmation_template,create_rfq_another_template,create_another_rfq_template,create_rfq_revise_details_template
+from prompt_templates.create_purchase_Order_prompt_templates import create_purchase_order_greeting_template, create_purchase_order_select_quote_template, create_purchase_order_no_quote_template, create_purchase_order_quote_selection_invalid_template, create_purchase_order_quote_confirmation_template,create_purchase_order_po_submitted_template, create_purchase_order_po_cancelled_template, check_purchase_order_invalid_template, create_another_purchase_order_template,create_another_purchase_order_invalid_response_template
+
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -43,14 +45,17 @@ db = client.sourcify
 purchase_requests_collection = db.requests
 workflows = db.workflows
 departments = db.departments
-actions = db.actions
+pos = db.pos
 requestfors = db.requestfors
+quotations = db.quotations
+
+# print(getPurchaseRequestTitle(1, db))
 
 
 # print(list(departments.find({}).limit(2)))
 # print(list(actions.find({})))
 # print(list(purchase_requests_collection.find({}).limit(1)))
-print(list(requestfors.find({}).limit(2)))
+# print(list(pos.find({}).limit(2)))
 
 # Initialize OpenAI's GPT-4 model
 llm = ChatOpenAI(model="gpt-4-turbo", api_key=OPEN_AI_KEY)
@@ -70,6 +75,187 @@ conversation_chain = ConversationChain(
 # ThreadPoolExecutor for concurrent API calls
 executor = ThreadPoolExecutor(max_workers=10)
 
+@app.route('/create_purchase_order', methods=['POST'])
+def create_purchase_order():
+    user_id = request.json.get('userId')
+    user_input = request.json.get('message')
+    user_name = request.json.get('userName')
+
+    if not user_id:
+        print("Error: userId is missing in the request.")
+        return jsonify({"error": "User ID is required"}), 400
+
+
+    session = get_session_data(user_id)
+
+    # Initialize session if not found
+    if not session:
+        session = {
+            "userId": user_id,
+            "userName": user_name,
+            "userInput": user_input,
+            "step": "rfq_checking",
+            "greeting_sent": True
+        }
+        set_session_data(user_id, session)
+
+
+    # Handle "start" input to reset session
+    if user_input == "start":
+        session["step"] = "rfq_checking"
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        print(f"Session reset for {user_id}: {session}")
+        response = conversation_chain.predict(
+            input=create_purchase_order_greeting_template.format(user_name=user_name)
+        )
+        return jsonify({"response": response})
+
+    # Check and update greeting status
+    if not session.get("greeting_sent"):
+        session["greeting_sent"] = True
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+            input=create_purchase_order_greeting_template.format(user_name=user_name)
+        )
+        return jsonify({"response": response})
+
+    # Retrieve the current step from session
+    step = session.get("step", "rfq_checking")
+    print(f"User {user_id} is at step: {step}")
+
+
+    if step == "rfq_checking":
+        rfq_input = str(extract_number(user_input))
+        rfq = find_request_id(rfq_input, db)
+        if not rfq:
+            try:
+                rfq_ids = listAllRFQs(db)
+                session["rfqs"] = rfq_ids
+                session["step"] = "rfq_checking"
+                set_session_data(user_id, session)
+                response = {
+                    "response": conversation_chain.predict(input=quote_recomendation_list_rfq_template.format(input=user_input)),
+                    "available_rfqs": rfq_ids,
+                }
+                return jsonify(response)
+            except Exception as e:
+                session["step"] = "rfq_checking"
+                response = conversation_chain.predict(
+                    input=quote_error_fetching_rfq_list__template.format(error=str(e))
+                )
+                return jsonify({"response": response})
+
+        # Proceed to next step if RFQ is found
+        session["selected_rfq"] = rfq
+        session["selected_bids"] = getBids(rfq, db)
+        quotations = getQuotationsForBids(session["selected_bids"], db)
+        session["selected_quotes"] = quotations
+        quote_details = getQuotationDetails(session.get("selected_quotes", []), db)
+        session["quote_details"] = quote_details
+        set_session_data(user_id, session)
+
+        if not quote_details:
+            session["step"] = "rfq_checking"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(          input=create_purchase_order_no_quote_template.format(rfq_number=rfq))
+            return jsonify({"response":response})
+
+        else:
+            session["step"] = "quote_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+            input=create_purchase_order_select_quote_template.format(rfq_number=rfq))
+            return jsonify({"response": response, "available_quotes":session["quote_details"]})
+
+
+    elif step == "quote_selection":
+        quote_id = user_input.strip()
+        po_id = generate_random_string()
+        session["quote_id"] = quote_id
+        result = find_quote_by_id(session["quote_details"], quote_id)
+        if not result:
+            session["step"] = "quote_selection"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+            input=create_purchase_order_quote_selection_invalid_template.format(input=quote_id))
+            return jsonify({"response":response})
+        quote_data= {
+            "item":result.get("item"),
+            "quantity":result.get("quantity"),
+            "price":result.get("price"),
+            "Quote_Id":result.get("id"),
+            "delivery_date":result.get("delivery_date"),
+            "vendor":result.get("vendor"),
+            "orderNumber":f"PO-{po_id}"
+        }
+        session["final_quote"] = result
+        session["quote_data"] = quote_data
+        session["step"] = "confirmation"
+        set_session_data(user_id, session)
+        response = conversation_chain.predict(
+        input=create_purchase_order_quote_confirmation_template.format(input=quote_id))
+        return jsonify({"response":response, "final_quote":session["final_quote"]})
+
+
+    elif step == "confirmation":
+        action = check_review_response(user_input)
+        if action == "yes":
+                        # Serialize the data
+                serialized_data = serialize_object_id(session["quote_data"])
+                db.purchaseorders.insert_one(serialized_data)  # This will now be JSON-compatible
+                delete_session_data(user_id)
+                session["step"] = "another_po"
+                set_session_data(user_id, session)
+                response = conversation_chain.predict(
+                    input=create_purchase_order_po_submitted_template.format(input=session["quote_id"]))
+                return jsonify({
+                    "response": response
+                })
+        elif action == "no":
+            delete_session_data(user_id)
+            response = conversation_chain.predict(input=create_purchase_order_po_cancelled_template.format(input=user_input))
+            return jsonify({"response": response, "exit": True})
+
+        else:
+            session["step"] = "confirmation"
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=check_purchase_order_invalid_template.format(input=user_input)
+            )
+            return jsonify({"response": response})
+
+            # Add a new branch in the main handler for "another_rfq"
+    elif step == "another_po":
+        action = check_review_response(user_input)
+        if action == "yes":
+            greeting_sent = session.get("greeting_sent", True)  # Default to True for safety
+            delete_session_data(user_id)
+            set_session_data(user_id, {"step": "rfq_checking", "greeting_sent": greeting_sent})
+            response = conversation_chain.predict(
+                input=create_another_purchase_order_template.format(user_name=user_name)
+            )
+            return jsonify({"response": response})
+        elif action == "no":
+            delete_session_data(user_id)
+            response = conversation_chain.predict(
+                input=exit_template.format()
+            )
+            return jsonify({"response": response, "exit": True})
+        else:
+            # Handle invalid inputs for the yes/no decision
+            set_session_data(user_id, session)
+            response = conversation_chain.predict(
+                input=create_another_purchase_order_invalid_response_template.format()
+            )
+            return jsonify({"response": response})
+    # Unhandled step
+    delete_session_data(user_id)
+    set_session_data(user_id, {"step": "rfq_selection"})
+    response  = conversation_chain.predict(
+                input=quote_session_reset_template.format()
+            )
+    return jsonify({"response": response})
 
 @app.route('/create_rfq', methods=['POST'])
 def create_rfq():
@@ -309,7 +495,6 @@ def check_progress():
         # If a valid PR is found, proceed to the next step
         session["selected_pr"] = selected_pr
         session["request_details"] = get_request_details(session["selected_pr"], db)
-        print(session["request_details"])
         session["step"] = "confirm_selection"
         set_session_data(user_id, session)
         response = conversation_chain.predict(
@@ -675,7 +860,8 @@ def recommended_best_quotes_overview():
 
 # Route for recommending best quotes
 @app.route('/recommend_quotes', methods=['POST'])
-def recommend_best_quotes():
+def recommend_quotes():
+    print("Hi")
     user_id = request.json.get('userId')
     user_input = request.json.get('message')
     user_name = request.json.get('userName')
@@ -730,12 +916,13 @@ def recommend_best_quotes():
         if not rfq:
             try:
                 rfq_ids = listAllRFQs(db)
+                print(rfq_ids)
                 session["rfqs"] = rfq_ids
                 session["step"] = "rfq_checking"
                 set_session_data(user_id, session)
 
                 response = {
-                    "response": conversation_chain.predict(input=quote_recomendation_list_rfq_template.format()),
+                    "response": conversation_chain.predict(input=quote_recomendation_list_rfq_template.format(input=user_input)),
                     "available_rfqs": rfq_ids,
                 }
                 return jsonify(response)

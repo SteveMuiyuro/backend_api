@@ -5,7 +5,7 @@ quote_recomendation_greeting_template = PromptTemplate(
 )
 
 quote_recomendation_list_rfq_template = PromptTemplate(
-    template="state to the use that it seems that the RFQ ID is missing or invalid, request the user to select a valid RFQ ID from the populated list below do not add examples just one to two sentence max"
+    template="Analyse the  {input}, request the user to select a valid RFQ ID from the populated list below do not add examples just one to two sentence max"
 
 )
 
