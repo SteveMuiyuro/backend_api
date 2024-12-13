@@ -78,10 +78,6 @@ Please ensure that:
 5. Ensure the supplier's contact phone number and email address are included and valid.
 6. All URLs (for the product and the product image) must be active, valid, and functional.
 7. Validate that all JSON fields conform to the specified types and structure.
-8. If there is an error or no data is available, return a JSON object with a meaningful "error" key, such as:
-   {
-       "error": "No suppliers found for the requested criteria."
-   }
 9. The JSON response must be parsable directly by standard JSON parsers, without requiring any manual modifications.
 """
     payload = {
@@ -123,9 +119,11 @@ def get_product_price_data(prompt, limit):
             return jsonify({"error": "Sorry, I cannot find sufficient data to respond to your request."}), 500
             # Extract the JSON content from the Perplexity response
         content = choices[0].get("message", {}).get("content", "")
+        print(content)
 
             # json_data = extract_json_from_response(content)
         json_data = extract_json_from_response(content)
+        print(json_data)
         if not json_data:
                 print("there is an error 1")
                 return jsonify({"error": "Sorry, I cannot find sufficient data to respond to your request."}), 500
