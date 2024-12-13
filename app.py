@@ -1152,7 +1152,7 @@ def product_prices():
         limit = data.get("limit", 8)
 
         if detect_product_query(prompt):
-            return get_product_price_data(prompt, limit)
+              return get_product_price_data(prompt, limit)
 
         else:
             try:

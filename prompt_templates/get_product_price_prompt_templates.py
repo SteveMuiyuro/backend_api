@@ -11,7 +11,6 @@ location_template = PromptTemplate(
 )
 
 final_prompt_template = PromptTemplate(
-    input_variables=["product_name", "location"],
     template="What is the price of {product_name} in {location}?"
 )
 

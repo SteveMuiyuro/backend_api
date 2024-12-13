@@ -5,7 +5,7 @@ create_request_greetings_template_template = PromptTemplate(
 )
 
 create_request_reason_template_template = PromptTemplate(
-    template="Respond that the due date:{input} has been noted. Request the user to provide the reason for the purchase in the format 10 broken tables or 12 faulty laptops"
+    template="Respond that the due date:{input} has been noted. Request the user to provide the reason for creating the purchase request"
 )
 
 create_request_priority_template_template = PromptTemplate(

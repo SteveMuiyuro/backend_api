@@ -54,6 +54,7 @@ def query_perplexity(prompt):
     }
     schema_description = """
 Please provide a JSON response with the following structure:
+
 {
     "suppliers": [
         {
@@ -70,14 +71,19 @@ Please provide a JSON response with the following structure:
 }
 
 Please ensure that:
-1. Only top-rated suppliers with high ratings (if available) are included in the response.
-2. Prices are reflective of the current market rates.
-3. The response include the supplier's contact cell or phone number
-4. The response should also include an email address
-5. The product URL and email addresses must be active, valid, and functional.
-6. The response contains only valid JSON according to the structure above.
+1. The response is strictly in JSON format as specified above. **Do not include any additional text, comments, or code blocks.**
+2. Do not surround the response with any markers like ```json or similar. Return only raw JSON data.
+3. Include only top-rated, highly authoritative suppliers in selected regions with high review ratings.
+4. Prices must be reflective of the current market rates and presented in a clear, readable format (e.g., "$1000" or "Ksh 100,000").
+5. Ensure the supplier's contact phone number and email address are included and valid.
+6. All URLs (for the product and the product image) must be active, valid, and functional.
+7. Validate that all JSON fields conform to the specified types and structure.
+8. If there is an error or no data is available, return a JSON object with a meaningful "error" key, such as:
+   {
+       "error": "No suppliers found for the requested criteria."
+   }
+9. The JSON response must be parsable directly by standard JSON parsers, without requiring any manual modifications.
 """
-
     payload = {
         "model": "llama-3.1-sonar-large-128k-online",
         "messages": [
@@ -103,24 +109,28 @@ def extract_json_from_response(content):
     except (json.JSONDecodeError, ValueError) as e:
         return None, str(e)
 
+
+
 def get_product_price_data(prompt, limit):
     try:
         future = executor.submit(query_perplexity, f"{prompt} return {limit} results")
         response_dict = future.result()
-        print(response_dict)
+        print(prompt)
+
         # Extract the 'choices' field from the Perplexity response
         choices = response_dict.get("choices", [])
         if not choices:
             return jsonify({"error": "Sorry, I cannot find sufficient data to respond to your request."}), 500
             # Extract the JSON content from the Perplexity response
         content = choices[0].get("message", {}).get("content", "")
+
             # json_data = extract_json_from_response(content)
         json_data = extract_json_from_response(content)
         if not json_data:
                 print("there is an error 1")
                 return jsonify({"error": "Sorry, I cannot find sufficient data to respond to your request."}), 500
 
-            # Validate against the expected schema
+        #     # Validate against the expected schema
         validate(instance=json_data, schema=expected_schema)
 
             # Extract the number of results and the first product's details for the introductory message
@@ -132,6 +142,7 @@ def get_product_price_data(prompt, limit):
         # Use the first supplier's product name and location for the message
         first_supplier = suppliers[0]
         product_name = first_supplier.get("product_name", "the product")
+
         location = first_supplier.get("location", "the specified location")
         # Form the introductory message
         intro_message = f"I have found {num_results} results for {product_name} in {location}."
@@ -152,7 +163,7 @@ def get_product_price_data(prompt, limit):
                         "supplier": item.get("supplier", "Unknown Supplier"),
                         "product_name": product_name,
                         "price": price,
-                        "location": item.get("location", "Unknown Location"),
+                        "location": item.get("location", "Unknown   Location"),
                         "supplier_contact": item.get("supplier_contact", "Not Available"),
                         "email": item.get("email", "Not Available"),
                         "product_url": item.get("product_url", "Not Available"),
@@ -165,6 +176,7 @@ def get_product_price_data(prompt, limit):
                     "suppliers": structured_response
                 }), 200
     except ValidationError as e:
+        print("there is an error 2")
         # Handle JSON schema validation errors
         return jsonify({"error": "Data validation failed", "details": str(e)}), 400
     except requests.exceptions.HTTPError as http_err:
